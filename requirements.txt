@@ -1,0 +1,9 @@
+# کتابخانه‌های مورد نیاز برای سیستم مدیریت تعمیرگاه
+PySide6==6.5.0
+jdatetime==5.2.0
+matplotlib==3.7.1
+reportlab==4.0.4
+pandas==2.0.2
+openpyxl==3.1.2
+python-dateutil==2.8.2
+sqlite3 (built-in)

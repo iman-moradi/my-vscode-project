@@ -1,0 +1,56 @@
+# فایل‌های پایتون
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# دیتابیس
+*.db
+*.sqlite
+*.sqlite3
+
+# پشتیبان‌ها
+backup/
+*.bak
+
+# لاگ‌ها
+*.log
+logs/
+
+# سیستم‌عامل
+.DS_Store
+Thumbs.db
+
+# محیط‌های مجازی
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# فایل‌های موقت
+*.tmp
+*.temp
+
+# فایل‌های شخصی
+config_local.ini
