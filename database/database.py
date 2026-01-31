@@ -41,7 +41,92 @@ class DatabaseManager(QObject):
             self.error_occurred.emit(f"خطا در اتصال به دیتابیس: {str(e)}")
             return False
     
-    def gregorian_to_jalali(self, gregorian_date):
+    # در کلاس DatabaseManager در database.py
+
+    def fetch_all(self, query, params=()):
+        """دریافت تمام ردیف‌های یک کوئری"""
+        try:
+            # حذف کامنت‌های فارسی از کوئری
+            clean_query = query.replace('#', '--')
+            self.connect()
+            self.cursor.execute(clean_query, params)
+            rows = self.cursor.fetchall()
+            
+            # تبدیل به لیست دیکشنری
+            result = []
+            for row in rows:
+                row_dict = {}
+                for idx, col in enumerate(self.cursor.description):
+                    row_dict[col[0]] = row[idx]
+                result.append(row_dict)
+            return result
+            
+        except Exception as e:
+            print(f"خطا در fetch_all: {e}")
+            print(f"کوئری اصلی: {query}")
+            print(f"کوئری تمیز شده: {clean_query}")
+            return []
+        finally:
+            if self.connection:
+                self.connection.close()
+
+
+    def fetch_one(self, query, params=()):
+        """دریافت یک ردیف از کوئری"""
+        try:
+            # حذف کامنت‌های فارسی از کوئری (جایگزینی # با --)
+            clean_query = query.replace('#', '--')
+            self.connect()
+            self.cursor.execute(clean_query, params)
+            row = self.cursor.fetchone()
+            
+            if row:
+                row_dict = {}
+                for idx, col in enumerate(self.cursor.description):
+                    row_dict[col[0]] = row[idx]
+                return row_dict
+            return None
+            
+        except Exception as e:
+            print(f"خطا در fetch_one: {e}")
+            print(f"کوئری اصلی: {query}")
+            print(f"کوئری تمیز شده: {clean_query}")
+            print(f"پارامترها: {params}")
+            return None
+        finally:
+            if self.connection:
+                self.connection.close()
+
+
+    def execute_query(self, query, params=()):
+        """اجرای کوئری INSERT/UPDATE/DELETE"""
+        try:
+            self.connect()
+
+            
+            self.cursor.execute(query, params)
+            self.connection.commit()
+            return True
+            
+        except sqlite3.Error as e:
+            print(f"❌ خطای SQLite در execute_query: {e}")
+            print(f"   کوئری: {query}")
+            print(f"   پارامترها: {params}")
+            if self.connection:
+                self.connection.rollback()
+            return False
+        except Exception as e:
+            print(f"❌ خطای عمومی در execute_query: {e}")
+            if self.connection:
+                self.connection.rollback()
+            return False
+        finally:
+            if self.connection:
+                self.connection.close()
+
+    # در کلاس DatabaseManager، این توابع را اضافه یا اصلاح کنید:
+
+    def gregorian_to_jalali(self, gregorian_date, format_str="%Y/%m/%d"):
         """تبدیل تاریخ میلادی به شمسی (برای نمایش)"""
         if not gregorian_date:
             return ""
@@ -49,40 +134,63 @@ class DatabaseManager(QObject):
         try:
             if isinstance(gregorian_date, str):
                 # اگر رشته تاریخ میلادی است
-                parts = gregorian_date.split('-')
-                if len(parts) == 3:
-                    year, month, day = map(int, parts)
-                    jalali = jdatetime.date.fromgregorian(year=year, month=month, day=day)
-                    return jalali.strftime("%Y/%m/%d")
+                for fmt in ["%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"]:
+                    try:
+                        date_obj = datetime.strptime(gregorian_date, fmt)
+                        jalali = jdatetime.date.fromgregorian(date=date_obj.date())
+                        return jalali.strftime(format_str)
+                    except:
+                        continue
             
             elif isinstance(gregorian_date, date):
                 # اگر شیء date است
                 jalali = jdatetime.date.fromgregorian(date=gregorian_date)
-                return jalali.strftime("%Y/%m/%d")
+                return jalali.strftime(format_str)
                 
         except Exception as e:
-            print(f"خطا در تبدیل تاریخ: {e}")
+            print(f"خطا در تبدیل تاریخ میلادی به شمسی: {e}")
         
         return str(gregorian_date)
-    
-    def jalali_to_gregorian(self, jalali_date_str):
+
+    def jalali_to_gregorian(self, jalali_date_str, format_str="%Y-%m-%d"):
         """تبدیل تاریخ شمسی به میلادی (برای ذخیره در دیتابیس)"""
         if not jalali_date_str:
             return None
         
         try:
-            # فرض می‌کنیم فرمت تاریخ شمسی yyyy/mm/dd است
-            parts = jalali_date_str.split('/')
-            if len(parts) == 3:
-                year, month, day = map(int, parts)
-                jalali = jdatetime.date(year, month, day)
-                gregorian = jalali.togregorian()
-                return gregorian.strftime("%Y-%m-%d")
+            # حذف فاصله و نویسه‌های اضافی
+            jalali_date_str = str(jalali_date_str).strip()
+            
+            # اگر تاریخ میلادی است، برگردان
+            if '-' in jalali_date_str and len(jalali_date_str.split('-')) == 3:
+                parts = jalali_date_str.split('-')
+                if len(parts[0]) == 4 and int(parts[0]) > 1500:
+                    return jalali_date_str  # احتمالاً میلادی است
+            
+            # فرض می‌کنیم تاریخ شمسی است
+            # حذف کاراکترهای غیرعددی
+            import re
+            numbers = re.findall(r'\d+', jalali_date_str)
+            
+            if len(numbers) >= 3:
+                year, month, day = map(int, numbers[:3])
+                
+                # تشخیص اینکه آیا تاریخ شمسی است (سال بین 1300-1500)
+                if 1300 <= year <= 1500:
+                    jalali = jdatetime.date(year, month, day)
+                    gregorian = jalali.togregorian()
+                    return gregorian.strftime(format_str)
+                else:
+                    # احتمالاً میلادی است
+                    return f"{year:04d}-{month:02d}-{day:02d}"
+                    
         except Exception as e:
-            print(f"خطا در تبدیل تاریخ شمسی: {e}")
+            print(f"خطا در تبدیل تاریخ شمسی به میلادی: {e}")
+            print(f"ورودی: {jalali_date_str}")
         
         return jalali_date_str
-    
+
+  
     def get_current_jalali_date(self):
         """دریافت تاریخ شمسی امروز"""
         return jdatetime.datetime.now().strftime("%Y/%m/%d")
@@ -91,6 +199,187 @@ class DatabaseManager(QObject):
         """دریافت تاریخ و زمان شمسی فعلی"""
         return jdatetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     
+
+    def migrate_used_appliances_warehouse(self):
+        """مهاجرت جدول UsedAppliancesWarehouse به ساختار انعطاف‌پذیر"""
+        try:
+            self.connect()
+            
+            # 1. بررسی وجود جدول قدیمی
+            self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='UsedAppliancesWarehouse'")
+            if not self.cursor.fetchone():
+                print("جدول UsedAppliancesWarehouse وجود ندارد.")
+                return True
+            
+            # 2. بررسی ساختار فعلی
+            self.cursor.execute("PRAGMA table_info(UsedAppliancesWarehouse)")
+            columns = [col[1] for col in self.cursor.fetchall()]
+            
+            if 'device_type_id' in columns:
+                print("جدول UsedAppliancesWarehouse قبلاً به ساختار جدید مهاجرت کرده است.")
+                return True
+            
+            print("🔧 شروع مهاجرت جدول UsedAppliancesWarehouse...")
+            
+            # 3. ایجاد جدول جدید با ساختار انعطاف‌پذیر
+            self.cursor.execute('''
+            CREATE TABLE UsedAppliancesWarehouse_New (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_type_id INTEGER NOT NULL,
+                brand_id INTEGER NOT NULL,
+                model TEXT NOT NULL,
+                serial_number TEXT UNIQUE,
+                production_year INTEGER,
+                source_type TEXT CHECK(source_type IN ('مشتری', 'تامین کننده', 'تعویض شده')) DEFAULT 'مشتری',
+                source_person_id INTEGER,
+                original_reception_id INTEGER,
+                condition TEXT CHECK(condition IN ('در حد نو', 'خیلی خوب', 'خوب', 'متوسط', 'نیاز به تعمیر جزئی', 'نیاز به تعمیر اساسی')),
+                technical_status TEXT,
+                last_repair_date DATE,
+                repair_history TEXT,
+                purchase_price DECIMAL(15, 2) NOT NULL,
+                purchase_date DATE DEFAULT CURRENT_DATE,
+                purchase_document TEXT,
+                sale_price DECIMAL(15, 2) NOT NULL,
+                warranty_type TEXT CHECK(warranty_type IN ('گارانتی فروشگاه', 'گارانتی کارخانه', 'فاقد گارانتی')) DEFAULT 'گارانتی فروشگاه',
+                warranty_days INTEGER DEFAULT 90,
+                warranty_description TEXT,
+                quantity INTEGER DEFAULT 0,
+                location TEXT,
+                status TEXT CHECK(status IN ('موجود', 'ناموجود', 'فروخته شده', 'در حال تعمیر', 'رزرو شده', 'اسقاط')) DEFAULT 'موجود',
+                accessories TEXT,
+                description TEXT,
+                photos_path TEXT,
+                entry_date DATE DEFAULT CURRENT_DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (device_type_id) REFERENCES DeviceCategories_name(id),
+                FOREIGN KEY (brand_id) REFERENCES Brands(id),
+                FOREIGN KEY (source_person_id) REFERENCES Persons(id),
+                FOREIGN KEY (original_reception_id) REFERENCES Receptions(id)
+            )
+            ''')
+            
+            # 4. دریافت داده‌های قدیمی
+            self.cursor.execute('''
+            SELECT 
+                uaw.*,
+                d.device_type as old_device_type,
+                d.brand as old_brand,
+                d.model as old_model,
+                d.serial_number as old_serial,
+                d.production_year as old_year,
+                d.description as old_description
+            FROM UsedAppliancesWarehouse uaw
+            LEFT JOIN Devices d ON uaw.device_id = d.id
+            ''')
+            
+            old_data = self.cursor.fetchall()
+            print(f"📊 تعداد رکوردهای قدیمی: {len(old_data)}")
+            
+            # 5. انتقال داده‌ها
+            for row in old_data:
+                # تبدیل device_type به ID
+                device_type_name = row['old_device_type'] if row['old_device_type'] else 'سایر'
+                self.cursor.execute(
+                    "SELECT id FROM DeviceCategories_name WHERE name = ?",
+                    (device_type_name,)
+                )
+                device_type_result = self.cursor.fetchone()
+                
+                if device_type_result:
+                    device_type_id = device_type_result[0]
+                else:
+                    self.cursor.execute(
+                        "INSERT INTO DeviceCategories_name (name) VALUES (?)",
+                        (device_type_name,)
+                    )
+                    device_type_id = self.cursor.lastrowid
+                
+                # تبدیل brand به ID
+                brand_name = row['old_brand'] if row['old_brand'] else 'نامشخص'
+                self.cursor.execute(
+                    "SELECT id FROM Brands WHERE name = ?",
+                    (brand_name,)
+                )
+                brand_result = self.cursor.fetchone()
+                
+                if brand_result:
+                    brand_id = brand_result[0]
+                else:
+                    self.cursor.execute(
+                        "INSERT INTO Brands (name) VALUES (?)",
+                        (brand_name,)
+                    )
+                    brand_id = self.cursor.lastrowid
+                
+                # تعیین source_type
+                if row['source_customer']:
+                    source_type = 'مشتری'
+                    source_person_id = row['source_customer']
+                else:
+                    source_type = 'تامین کننده'
+                    source_person_id = row.get('supplier_id')
+                
+                # درج در جدول جدید
+                self.cursor.execute('''
+                INSERT INTO UsedAppliancesWarehouse_New (
+                    device_type_id, brand_id, model, serial_number, production_year,
+                    source_type, source_person_id, condition, purchase_price, sale_price,
+                    purchase_date, warranty_days, quantity, location, status, description,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    device_type_id,
+                    brand_id,
+                    row['old_model'] if row['old_model'] else 'نامشخص',
+                    row['old_serial'],
+                    row['old_year'],
+                    source_type,
+                    source_person_id,
+                    row.get('condition', 'خوب'),
+                    row['purchase_price'],
+                    row['sale_price'],
+                    row['purchase_date'],
+                    row.get('warranty_days', 90),
+                    row['quantity'],
+                    row['location'],
+                    row['status'],
+                    row['old_description'] if row['old_description'] else '',
+                    row['created_at']
+                ))
+            
+            # 6. حذف جدول قدیمی و تغییر نام
+            self.cursor.execute("DROP TABLE UsedAppliancesWarehouse")
+            self.cursor.execute("ALTER TABLE UsedAppliancesWarehouse_New RENAME TO UsedAppliancesWarehouse")
+            
+            # 7. ایجاد ایندکس‌ها
+            indexes = [
+                "CREATE INDEX IF NOT EXISTS idx_used_appliances_device_type ON UsedAppliancesWarehouse(device_type_id)",
+                "CREATE INDEX IF NOT EXISTS idx_used_appliances_brand ON UsedAppliancesWarehouse(brand_id)",
+                "CREATE INDEX IF NOT EXISTS idx_used_appliances_source ON UsedAppliancesWarehouse(source_type, source_person_id)",
+                "CREATE INDEX IF NOT EXISTS idx_used_appliances_status ON UsedAppliancesWarehouse(status)",
+                "CREATE INDEX IF NOT EXISTS idx_used_appliances_condition ON UsedAppliancesWarehouse(condition)"
+            ]
+            
+            for index_sql in indexes:
+                self.cursor.execute(index_sql)
+            
+            self.connection.commit()
+            print("✅ مهاجرت جدول UsedAppliancesWarehouse با موفقیت انجام شد.")
+            return True
+            
+        except Exception as e:
+            print(f"❌ خطا در مهاجرت جدول UsedAppliancesWarehouse: {e}")
+            import traceback
+            traceback.print_exc()
+            if self.connection:
+                self.connection.rollback()
+            return False
+        finally:
+            if self.connection:
+                self.connection.close()
+
     def initialize_database(self):
         """ایجاد جداول دیتابیس"""
         try:
@@ -168,6 +457,55 @@ class DatabaseManager(QObject):
             )
             ''')
             
+
+            # در فایل database.py، در تابع initialize_database()، بعد از جدول LookupValues اضافه کنید:
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS DeviceCategories_name (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+
+            # درج چند دسته‌بندی پیش‌فرض
+            default_categories = [
+                'سشوار',
+                'لباسشویی', 
+                'جاروبرقی',
+                'پنکه',
+                'یخچال',
+                'فریزر',
+                'ماشین ظرفشویی',
+                'مایکروویو',
+                'اجاق گاز',
+                'هود',
+                'کولر',
+                'بخاری',
+                'آبسردکن',
+                'آبگرمکن',
+                'اتو',
+                'چرخ گوشت',
+                'مخلوط کن',
+                'آسیاب',
+                'قهوه ساز',
+                'سایر'
+            ]
+
+            for category in default_categories:
+                self.cursor.execute('''
+                INSERT OR IGNORE INTO DeviceCategories_name (name) 
+                VALUES (?)
+                ''', (category,))
+
+            #جدول معرفی برندها
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Brands (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+
             # ایجاد جدول پذیرش
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS Receptions (
@@ -203,6 +541,7 @@ class DatabaseManager(QObject):
                 repair_type TEXT CHECK(repair_type IN ('داخلی', 'بیرون سپاری')) DEFAULT 'داخلی',
                 outsourced_to INTEGER,
                 outsourced_cost DECIMAL(15, 2) DEFAULT 0,
+                outsourced_description TEXT,  -- ✅ اضافه شد
                 labor_cost DECIMAL(15, 2) DEFAULT 0,
                 total_cost DECIMAL(15, 2) DEFAULT 0,
                 repair_description TEXT,
@@ -217,13 +556,46 @@ class DatabaseManager(QObject):
             )
             ''')
             
+
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Repair_Services (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repair_id INTEGER NOT NULL,
+                service_id INTEGER NOT NULL,  -- ارجاع به ServiceFees
+                quantity DECIMAL(5, 2) DEFAULT 1.0,
+                unit_price DECIMAL(15, 2) NOT NULL,
+                total_price DECIMAL(15, 2) NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repair_id) REFERENCES Repairs(id) ON DELETE CASCADE,
+                FOREIGN KEY (service_id) REFERENCES ServiceFees(id)
+            )
+            ''')
+
+            # قطعات مصرفی تعمیر
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Repair_Parts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repair_id INTEGER NOT NULL,
+                part_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL,
+                unit_price DECIMAL(15, 2) NOT NULL,
+                total_price DECIMAL(15, 2) NOT NULL,
+                warehouse_type TEXT CHECK(warehouse_type IN ('قطعات نو', 'قطعات دست دوم')),
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repair_id) REFERENCES Repairs(id) ON DELETE CASCADE,
+                FOREIGN KEY (part_id) REFERENCES Parts(id)
+            )
+            ''')
+
             # ایجاد جدول قطعات
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS Parts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 part_code TEXT UNIQUE NOT NULL,
                 part_name TEXT NOT NULL,
-                category TEXT CHECK(category IN ('الکترونیکی', 'مکانیکی', 'برقی', 'الکتریکی', 'ترموستات', 'کمپرسور', 'سایر')),
+                category TEXT,
                 brand TEXT,
                 model TEXT,
                 unit TEXT CHECK(unit IN ('عدد', 'متر', 'کیلو', 'لیتر', 'ست')) DEFAULT 'عدد',
@@ -296,7 +668,11 @@ class DatabaseManager(QObject):
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS NewAppliancesWarehouse (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                device_id INTEGER NOT NULL,
+                device_type_id INTEGER NOT NULL,          
+                brand_id INTEGER NOT NULL,                 
+                model TEXT NOT NULL,                      
+                serial_number TEXT,                       
+                production_year INTEGER,                  
                 quantity INTEGER DEFAULT 0,
                 purchase_price DECIMAL(15, 2) NOT NULL,
                 sale_price DECIMAL(15, 2) NOT NULL,
@@ -305,33 +681,80 @@ class DatabaseManager(QObject):
                 warranty_months INTEGER DEFAULT 12,
                 location TEXT,
                 status TEXT CHECK(status IN ('موجود', 'ناموجود', 'رزرو شده', 'فروخته شده')) DEFAULT 'موجود',
+                description TEXT,                         
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (device_id) REFERENCES Devices(id) ON DELETE CASCADE,
+                FOREIGN KEY (device_type_id) REFERENCES DeviceCategories_name(id),
+                FOREIGN KEY (brand_id) REFERENCES Brands(id),
                 FOREIGN KEY (supplier_id) REFERENCES Persons(id)
             )
             ''')
+
+            self.migrate_new_appliances_warehouse()
             
             # ایجاد جدول انبار لوازم خانگی دست دوم
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS UsedAppliancesWarehouse (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                device_id INTEGER NOT NULL,
+                
+                -- حالت 1: دستگاه از مشتری خریداری شده (بعد از تعمیر یا قبل از تعمیر)
+                -- حالت 2: دستگاه از بیرون خریداری شده
+                
+                -- **مشخصات دستگاه**
+                device_type_id INTEGER NOT NULL,  -- نوع دستگاه (از DeviceCategories_name)
+                brand_id INTEGER NOT NULL,        -- برند (از Brands)
+                model TEXT NOT NULL,              -- مدل
+                serial_number TEXT UNIQUE,        -- شماره سریال
+                production_year INTEGER,          -- سال تولید
+                
+                -- **منبع دستگاه**
+                source_type TEXT CHECK(source_type IN ('مشتری', 'تامین کننده', 'تعویض شده')) DEFAULT 'مشتری',
+                source_person_id INTEGER,         -- آیدی شخص (مشتری یا تامین کننده)
+                original_reception_id INTEGER,    -- اگر از مشتری خریداری شده، آیدی پذیرش اصلی
+                
+                -- **وضعیت فنی**
+                condition TEXT CHECK(condition IN ('در حد نو', 'خیلی خوب', 'خوب', 'متوسط', 'نیاز به تعمیر جزئی', 'نیاز به تعمیر اساسی')),
+                technical_status TEXT,            -- وضعیت فنی دقیق (JSON یا متن)
+                last_repair_date DATE,           -- تاریخ آخرین تعمیر
+                repair_history TEXT,              -- تاریخچه تعمیرات
+                
+                -- **اطلاعات خرید**
+                purchase_price DECIMAL(15, 2) NOT NULL,  -- قیمت خرید
+                purchase_date DATE DEFAULT CURRENT_DATE, -- تاریخ خرید
+                purchase_document TEXT,          -- شماره سند خرید
+                
+                -- **اطلاعات فروش**
+                sale_price DECIMAL(15, 2) NOT NULL,      -- قیمت پیشنهادی فروش
+                expected_profit DECIMAL(15, 2) GENERATED ALWAYS AS (sale_price - purchase_price) VIRTUAL,
+                
+                -- **گارانتی**
+                warranty_type TEXT CHECK(warranty_type IN ('گارانتی فروشگاه', 'گارانتی کارخانه', 'فاقد گارانتی')) DEFAULT 'گارانتی فروشگاه',
+                warranty_days INTEGER DEFAULT 90,        -- روزهای گارانتی
+                warranty_description TEXT,               -- توضیحات گارانتی
+                
+                -- **انبارداری**
                 quantity INTEGER DEFAULT 0,
-                purchase_price DECIMAL(15, 2) NOT NULL,
-                sale_price DECIMAL(15, 2) NOT NULL,
-                source_customer INTEGER,
-                condition TEXT CHECK(condition IN ('در حد نو', 'خیلی خوب', 'خوب', 'متوسط', 'نیاز به تعمیر')),
-                purchase_date DATE DEFAULT CURRENT_DATE,
-                warranty_days INTEGER DEFAULT 90,
-                repair_history TEXT,
-                location TEXT,
-                status TEXT CHECK(status IN ('موجود', 'ناموجود', 'فروخته شده', 'در حال تعمیر')) DEFAULT 'موجود',
+                location TEXT,                           -- محل انبار
+                status TEXT CHECK(status IN ('موجود', 'ناموجود', 'فروخته شده', 'در حال تعمیر', 'رزرو شده', 'اسقاط')) DEFAULT 'موجود',
+                
+                -- **اطلاعات تکمیلی**
+                accessories TEXT,                        -- لوازم همراه (مدارک، ریموت، ...)
+                description TEXT,                        -- توضیحات
+                photos_path TEXT,                        -- مسیر عکس‌ها (JSON)
+                
+                -- **زمان‌بندی**
+                entry_date DATE DEFAULT CURRENT_DATE,    -- تاریخ ورود به انبار
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (device_id) REFERENCES Devices(id) ON DELETE CASCADE,
-                FOREIGN KEY (source_customer) REFERENCES Persons(id)
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                
+                -- **کلیدهای خارجی**
+                FOREIGN KEY (device_type_id) REFERENCES DeviceCategories_name(id),
+                FOREIGN KEY (brand_id) REFERENCES Brands(id),
+                FOREIGN KEY (source_person_id) REFERENCES Persons(id),
+                FOREIGN KEY (original_reception_id) REFERENCES Receptions(id)
             )
             ''')
-            
+
+                        
             # ایجاد جدول تراکنش‌های انبار
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS InventoryTransactions (
@@ -563,12 +986,50 @@ class DatabaseManager(QObject):
             VALUES (1, 'سیستم مدیریت تعمیرگاه لوازم خانگی', 'شمسی')
             ''')
             
-            # درج کاربر پیش‌فرض
+
             self.cursor.execute('''
             INSERT OR IGNORE INTO Users (username, password, role) 
             VALUES ('admin', 'admin123', 'مدیر')
             ''')
+
+            # جدول ثبت حذف انبار 
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS InventoryDeleteTransactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                warehouse_type TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                unit_price REAL NOT NULL DEFAULT 0,
+                total_price REAL NOT NULL DEFAULT 0,
+                deletion_date TEXT NOT NULL,
+                deletion_reason TEXT,
+                description TEXT,
+                deleted_by TEXT DEFAULT 'سیستم',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+
+                # جدول حذف‌های نرم
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS InventorySoftDeletions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                warehouse_type TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                unit_price REAL NOT NULL DEFAULT 0,
+                total_price REAL NOT NULL DEFAULT 0,
+                deletion_date TEXT NOT NULL,
+                deletion_reason TEXT,
+                original_status TEXT NOT NULL,
+                new_status TEXT NOT NULL,
+                description TEXT,
+                deleted_by TEXT DEFAULT 'سیستم',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
             
+
+            self.migrate_missing_columns()
             # ایجاد ایندکس‌ها برای بهبود عملکرد
             self.create_indexes()
             
@@ -582,7 +1043,51 @@ class DatabaseManager(QObject):
         finally:
             if self.connection:
                 self.connection.close()
-    
+
+    def migrate_missing_columns(self):
+        """اضافه کردن ستون‌های گمشده به جداول"""
+        try:
+            self.connect()
+            
+            # 1. بررسی و اضافه کردن issue_date به جدول Checks (اگر وجود ندارد)
+            self.cursor.execute("PRAGMA table_info(Checks)")
+            check_columns = [col[1] for col in self.cursor.fetchall()]
+            
+            if 'issue_date' not in check_columns:
+                print("🔧 افزودن ستون issue_date به جدول Checks")
+                self.cursor.execute("ALTER TABLE Checks ADD COLUMN issue_date DATE DEFAULT CURRENT_DATE")
+                self.connection.commit()
+            
+            # 2. بررسی و اضافه کردن invoice_date به جدول Invoices (اگر وجود ندارد)
+            self.cursor.execute("PRAGMA table_info(Invoices)")
+            invoice_columns = [col[1] for col in self.cursor.fetchall()]
+            
+            if 'invoice_date' not in invoice_columns:
+                print("🔧 افزودن ستون invoice_date به جدول Invoices")
+                self.cursor.execute("ALTER TABLE Invoices ADD COLUMN invoice_date DATE DEFAULT CURRENT_DATE")
+                self.connection.commit()
+            
+            # 3. بروزرسانی داده‌های قدیمی
+            print("🔄 بروزرسانی داده‌های قدیمی...")
+            
+            # برای Checks: اگر issue_date خالی است، از due_date استفاده کن
+            self.cursor.execute("UPDATE Checks SET issue_date = due_date WHERE issue_date IS NULL")
+            
+            # برای Invoices: اگر invoice_date خالی است، از created_at استفاده کن
+            self.cursor.execute("UPDATE Invoices SET invoice_date = date(created_at) WHERE invoice_date IS NULL")
+            
+            self.connection.commit()
+            print("✅ مهاجرت ستون‌های گمشده انجام شد")
+            return True
+            
+        except Exception as e:
+            print(f"⚠️ خطا در مهاجرت ستون‌های گمشده: {e}")
+            return False
+        finally:
+            if self.connection:
+                self.connection.close()
+
+
     def create_indexes(self):
         """ایجاد ایندکس‌های مهم برای بهبود عملکرد"""
         indexes = [
@@ -595,6 +1100,22 @@ class DatabaseManager(QObject):
             "CREATE INDEX IF NOT EXISTS idx_repairs_reception ON Repairs(reception_id)",
             "CREATE INDEX IF NOT EXISTS idx_repairs_status ON Repairs(status)",
             
+            "CREATE INDEX IF NOT EXISTS idx_delete_warehouse_type ON InventoryDeleteTransactions(warehouse_type)",
+            "CREATE INDEX IF NOT EXISTS idx_delete_item_id ON InventoryDeleteTransactions(item_id)",
+            "CREATE INDEX IF NOT EXISTS idx_delete_date ON InventoryDeleteTransactions(deletion_date)",
+            
+            "CREATE INDEX IF NOT EXISTS idx_soft_delete_warehouse ON InventorySoftDeletions(warehouse_type)",
+            "CREATE INDEX IF NOT EXISTS idx_soft_delete_item ON InventorySoftDeletions(item_id)",
+            "CREATE INDEX IF NOT EXISTS idx_soft_delete_date ON InventorySoftDeletions(deletion_date)",
+                    
+
+
+            "CREATE INDEX IF NOT EXISTS idx_repair_services_repair ON Repair_Services(repair_id)",
+         
+            "CREATE INDEX IF NOT EXISTS idx_repair_services_service ON Repair_Services(service_id)",
+
+
+
             # ایندکس برای جدول اشخاص
             "CREATE INDEX IF NOT EXISTS idx_persons_type ON Persons(person_type)",
             "CREATE INDEX IF NOT EXISTS idx_persons_mobile ON Persons(mobile)",
@@ -680,6 +1201,7 @@ class DatabaseManager(QObject):
         except Exception as e:
             self.error_occurred.emit(f"خطا در بازیابی: {str(e)}")
             return False
+
 
 # تابع اصلی برای تست
 if __name__ == "__main__":

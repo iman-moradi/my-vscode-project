@@ -7,3 +7,7 @@ pandas==2.0.2
 openpyxl==3.1.2
 python-dateutil==2.8.2
 sqlite3 (built-in)
+# requirements.txt (اضافه کردن این خطوط)
+opencv-python==4.8.1.78
+pyzbar==0.1.9
+numpy==1.24.3

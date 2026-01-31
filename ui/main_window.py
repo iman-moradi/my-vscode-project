@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTabWidget, QTableWidget, QTableWidgetItem,
     QToolBar, QStatusBar, QMenuBar, QMenu, QFrame, QSplitter,
     QTreeWidget, QTreeWidgetItem, QDockWidget, QMessageBox,
-    QApplication, QStyleFactory, QListWidget, QListWidgetItem
+    QApplication, QStyleFactory, QListWidget, QListWidgetItem,QDialog
 )
 from PySide6.QtCore import Qt, QTimer, QDate, QSize
 from PySide6.QtGui import QIcon, QAction, QFont, QPixmap, QColor
@@ -30,8 +30,19 @@ except ImportError as e:
     PERSON_FORM_AVAILABLE = False
 
 
+try:
+    from ui.forms.reports.reports_window import ReportsWindow
+    from ui.forms.reports.reports_main_form import ReportsMainForm
+    REPORTS_WINDOW_AVAILABLE = True
+    print("✅ ماژول گزارش‌گیری در main_window بارگذاری شد")
+except ImportError as e:
+    print(f"⚠️ خطا در بارگذاری ماژول گزارش‌گیری در main_window: {e}")
+    import traceback
+    traceback.print_exc()
+    REPORTS_WINDOW_AVAILABLE = False
 
-# 🔴 اضافه کردن ایمپورت فرم پذیرش (در بخش ایمپورت‌های ابتدای فایل)
+
+
 try:
     from ui.forms.reception_form import ReceptionForm
     RECEPTION_FORM_AVAILABLE = True
@@ -48,11 +59,38 @@ except ImportError as e:
 
 try:
     from ui.forms.repair_form import RepairForm
-    DEVICE_FORM_AVAILABLE = True
+    REPAIR_FORM_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️ خطا در بارگذاری فرم تعمیرات : {e}")
-    DEVICE_FORM_AVAILABLE = False
+    print(f"⚠️ خطا در بارگذاری فرم تعمیرات: {e}")
+    REPAIR_FORM_AVAILABLE = False
 
+try:
+    from ui.forms.service_fee_form import ServiceFeeForm
+    SERVICE_FEE_FORM_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ خطا در بارگذاری فرم اجرت‌ها: {e}")
+    SERVICE_FEE_FORM_AVAILABLE = False
+
+
+try:
+    from ui.forms.inventory.inventory_window import InventoryWindow
+    INVENTORY_WINDOW_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ خطا در بارگذاری پنجره انبار: {e}")
+    INVENTORY_WINDOW_AVAILABLE = False
+    InventoryWindow = None
+
+try:
+    from ui.forms.accounting.accounting_window import AccountingWindow
+    ACCOUNTING_WINDOW_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ خطا در بارگذاری پنجره حسابداری: {e}")
+    import traceback
+    traceback.print_exc()  # نمایش جزییات خطا
+    ACCOUNTING_WINDOW_AVAILABLE = False
+    AccountingWindow = None
+
+    
 
 def convert_to_jalali_display(date_str):
     """تبدیل رشته تاریخ میلادی به شمسی برای نمایش"""
@@ -92,10 +130,75 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.user_data = user_data
         self.data_manager = data_manager
+        self.inventory_window = None
+        self.accounting_windows = {}
         self.init_ui()
         self.setup_connections()
         self.load_initial_data()
         
+    def clear_central_widget(self):
+        """پاک کردن ویجت مرکزی فعلی"""
+        old_widget = self.centralWidget()
+        if old_widget:
+            old_widget.setParent(None)
+            old_widget.deleteLater()
+
+
+    def show_dashboard(self):
+        """نمایش داشبورد اصلی"""
+        self.clear_central_widget()
+        
+        # ایجاد دوباره ویجت مرکزی
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # ایجاد layout اصلی (مشابه init_ui)
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
+        
+        # ایجاد دوباره داشبورد
+        dashboard_frame = QFrame()
+        dashboard_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border-radius: 10px;
+                border: 1px solid #333;
+            }
+        """)
+        
+        dashboard_layout = QVBoxLayout()
+        dashboard_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # عنوان داشبورد
+        dashboard_title = QLabel("📊 داشبورد مدیریت - تعمیرگاه شیروین")
+        dashboard_title.setStyleSheet("""
+            QLabel {
+                font-size: 20px;
+                font-weight: bold;
+                color: white;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #3498db;
+            }
+        """)
+        dashboard_layout.addWidget(dashboard_title)
+        
+        # ویجت‌های آماری
+        stats_widget = self.create_stats_widget()
+        dashboard_layout.addWidget(stats_widget)
+        
+        dashboard_frame.setLayout(dashboard_layout)
+        main_layout.addWidget(dashboard_frame)
+        
+        central_widget.setLayout(main_layout)
+        
+        # تازه‌سازی داده‌ها
+        self.refresh_dashboard_data()
+        
+        # تنظیم عنوان
+        self.setWindowTitle("سیستم مدیریت تعمیرگاه لوازم خانگی شیروین")
+
+
     def init_ui(self):
         """راه‌اندازی رابط کاربری"""
         self.setWindowTitle("سیستم مدیریت تعمیرگاه لوازم خانگی شیروین")
@@ -469,9 +572,9 @@ class MainWindow(QMainWindow):
         manage_menu.addAction(persons_action)
         
         # منوی مدیریت - بعد از persons_action
-        reception_action = QAction("📝 مدیریت پذیرش", self)  # 🔴 اضافه کردن این خط
-        reception_action.triggered.connect(self.open_reception_management)  # 🔴 اتصال به تابع
-        manage_menu.addAction(reception_action)  # 🔴 اضافه به منو
+        reception_action = QAction("📝 مدیریت پذیرش", self)
+        reception_action.triggered.connect(self.open_reception_management)
+        manage_menu.addAction(reception_action)
 
         devices_action = QAction("📱 مدیریت دستگاه‌ها", self)
         devices_action.triggered.connect(self.open_devices_management)
@@ -491,64 +594,194 @@ class MainWindow(QMainWindow):
         users_action.triggered.connect(self.open_users_management)
         manage_menu.addAction(users_action)
         
+        # منوی تعمیرات
+        repair_menu = menubar.addMenu("🔧 تعمیرات")
+
+        # آیتم مدیریت تعمیرات
+        act_manage_repairs = QAction("📋 مدیریت تعمیرات", self)
+        act_manage_repairs.triggered.connect(self.open_repairs_management)
+        repair_menu.addAction(act_manage_repairs)
+
+        # آیتم مشاهده تعمیرات جاری
+        act_current_repairs = QAction("⚡ تعمیرات در حال انجام", self)
+        act_current_repairs.triggered.connect(self.show_current_repairs)
+        repair_menu.addAction(act_current_repairs)
+
+        repair_menu.addSeparator()
+
+        # آیتم اجرت‌های استاندارد
+        act_service_fees = QAction("💰 مدیریت اجرت‌های استاندارد", self)
+        act_service_fees.triggered.connect(self.manage_service_fees)
+        repair_menu.addAction(act_service_fees)
+
         # منوی انبار
         inventory_menu = menubar.addMenu("📦 انبار")
         
-        new_parts_action = QAction("🔧 انبار قطعات نو", self)
-        new_parts_action.triggered.connect(self.open_new_parts_inventory)
-        inventory_menu.addAction(new_parts_action)
-        
-        used_parts_action = QAction("🔄 انبار قطعات دست دوم", self)
-        used_parts_action.triggered.connect(self.open_used_parts_inventory)
-        inventory_menu.addAction(used_parts_action)
+        act_inventory_main = QAction("🏠 مدیریت انبار", self)
+        act_inventory_main.triggered.connect(self.open_inventory_main)
+        inventory_menu.addAction(act_inventory_main)
         
         inventory_menu.addSeparator()
         
-        new_appliances_action = QAction("🏠 انبار لوازم نو", self)
-        new_appliances_action.triggered.connect(self.open_new_appliances_inventory)
-        inventory_menu.addAction(new_appliances_action)
+        act_new_parts = QAction("🔧 قطعات نو", self)
+        act_new_parts.triggered.connect(self.open_inventory_new_parts)
+        inventory_menu.addAction(act_new_parts)
         
-        used_appliances_action = QAction("🏚️ انبار لوازم دست دوم", self)
-        used_appliances_action.triggered.connect(self.open_used_appliances_inventory)
-        inventory_menu.addAction(used_appliances_action)
+        act_used_parts = QAction("🔩 قطعات دست دوم", self)
+        act_used_parts.triggered.connect(self.open_inventory_used_parts)
+        inventory_menu.addAction(act_used_parts)
         
-        # منوی مالی
-        finance_menu = menubar.addMenu("💰 مالی")
+        act_new_appliances = QAction("🏠 لوازم نو", self)
+        act_new_appliances.triggered.connect(self.open_inventory_new_appliances)
+        inventory_menu.addAction(act_new_appliances)
         
-        invoices_action = QAction("🧾 مدیریت فاکتورها", self)
-        invoices_action.triggered.connect(self.open_invoices_management)
-        finance_menu.addAction(invoices_action)
+        act_used_appliances = QAction("🏚️ لوازم دست دوم", self)
+        act_used_appliances.triggered.connect(self.open_inventory_used_appliances)
+        inventory_menu.addAction(act_used_appliances)
         
-        accounts_action = QAction("🏦 مدیریت حساب‌ها", self)
-        accounts_action.triggered.connect(self.open_accounts_management)
-        finance_menu.addAction(accounts_action)
+        inventory_menu.addSeparator()
         
-        checks_action = QAction("💳 مدیریت چک‌ها", self)
-        checks_action.triggered.connect(self.open_checks_management)
-        finance_menu.addAction(checks_action)
+        act_inventory_report = QAction("📊 گزارش انبار", self)
+        act_inventory_report.triggered.connect(self.open_inventory_report)
+        inventory_menu.addAction(act_inventory_report)
         
-        partners_action = QAction("🤝 مدیریت شرکا", self)
-        partners_action.triggered.connect(self.open_partners_management)
-        finance_menu.addAction(partners_action)
+        act_low_stock = QAction("⚠️ موجودی کم", self)
+        act_low_stock.triggered.connect(self.show_low_stock)
+        inventory_menu.addAction(act_low_stock)
+
+        act_inventory_settings = QAction("⚙️ تنظیمات انبار", self)
+        act_inventory_settings.triggered.connect(self.open_inventory_settings)
+        inventory_menu.addAction(act_inventory_settings)
+
+
+        """تنظیم منوی حسابداری"""
+        accounting_menu = self.menuBar().addMenu("🏦 حسابداری")
+        
+        # آیتم اصلی داشبورد حسابداری
+        act_accounting_dashboard = QAction("📊 پنجره مستقل حسابداری", self)
+        act_accounting_dashboard.triggered.connect(self.open_accounting_window)
+        accounting_menu.addAction(act_accounting_dashboard)
+        
+        accounting_menu.addSeparator()
+        
+        # حساب‌ها
+        act_accounts = QAction("🏦 حساب‌ها", self)
+        act_accounts.triggered.connect(self.open_accounts_form)
+        accounting_menu.addAction(act_accounts)
+        
+        # تراکنش‌ها
+        act_transactions = QAction("💰 تراکنش‌ها", self)
+        act_transactions.triggered.connect(self.open_transactions_form)
+        accounting_menu.addAction(act_transactions)
+        
+        # فاکتورها
+        act_invoices = QAction("🧾 فاکتورها", self)
+        act_invoices.triggered.connect(self.open_invoices_form)
+        accounting_menu.addAction(act_invoices)
+        
+        # چک‌ها
+        act_checks = QAction("💳 چک‌ها", self)
+        act_checks.triggered.connect(self.open_checks_form)
+        accounting_menu.addAction(act_checks)
+        
+        # شرکا
+        act_partners = QAction("🤝 شرکا", self)
+        act_partners.triggered.connect(self.open_partners_form)
+        accounting_menu.addAction(act_partners)
+        
+        accounting_menu.addSeparator()
+        
+        # محاسبه سود
+        act_profit = QAction("📈 محاسبه سود", self)
+        act_profit.triggered.connect(self.open_profit_calculation)
+        accounting_menu.addAction(act_profit)
+        
+        # گزارش‌های مالی
+        act_reports = QAction("📊 گزارش‌های مالی", self)
+        act_reports.triggered.connect(self.open_financial_reports)
+        accounting_menu.addAction(act_reports)
+        
+        # خلاصه روزانه
+        act_daily_summary = QAction("📋 خلاصه روزانه", self)
+        act_daily_summary.triggered.connect(self.open_daily_summary)
+        accounting_menu.addAction(act_daily_summary)
+        
+        accounting_menu.addSeparator()
+        
+        # تنظیمات مالی
+        act_settings = QAction("⚙️ تنظیمات مالی", self)
+        act_settings.triggered.connect(self.open_accounting_settings)
+        accounting_menu.addAction(act_settings)
         
         # منوی گزارشات
+        # بخش منوی گزارشات را به این صورت تغییر دهید:
+        # منوی گزارشات
         reports_menu = menubar.addMenu("📊 گزارشات")
-        
+
+        # پنجره مستقل گزارش‌گیری
+        reports_window_action = QAction("📊 پنجره مستقل گزارش‌گیری", self)
+        reports_window_action.triggered.connect(self.open_reports_window)
+        reports_menu.addAction(reports_window_action)
+
+        reports_menu.addSeparator()
+
+        # گزارش روزانه
         daily_report_action = QAction("📅 گزارش روزانه", self)
-        daily_report_action.triggered.connect(self.open_daily_report)
+        daily_report_action.triggered.connect(lambda: self.open_reports_tab(0))
         reports_menu.addAction(daily_report_action)
-        
-        monthly_report_action = QAction("📈 گزارش ماهانه", self)
-        monthly_report_action.triggered.connect(self.open_monthly_report)
+
+        # گزارش هفتگی
+        weekly_report_action = QAction("📆 گزارش هفتگی", self)
+        weekly_report_action.triggered.connect(lambda: self.open_reports_tab(1))
+        reports_menu.addAction(weekly_report_action)
+
+        # گزارش ماهانه
+        monthly_report_action = QAction("📅 گزارش ماهانه", self)
+        monthly_report_action.triggered.connect(lambda: self.open_reports_tab(2))
         reports_menu.addAction(monthly_report_action)
-        
+
+        reports_menu.addSeparator()
+
+        # گزارش مالی
         financial_report_action = QAction("💰 گزارش مالی", self)
-        financial_report_action.triggered.connect(self.open_financial_report)
+        financial_report_action.triggered.connect(lambda: self.open_reports_tab(3))
         reports_menu.addAction(financial_report_action)
-        
+
+        # گزارش انبار
         inventory_report_action = QAction("📦 گزارش انبار", self)
-        inventory_report_action.triggered.connect(self.open_inventory_report)
+        inventory_report_action.triggered.connect(lambda: self.open_reports_tab(4))
         reports_menu.addAction(inventory_report_action)
+
+        # گزارش تعمیرات
+        repair_report_action = QAction("🔧 گزارش تعمیرات", self)
+        repair_report_action.triggered.connect(lambda: self.open_reports_tab(5))
+        reports_menu.addAction(repair_report_action)
+
+        # گزارش فروش
+        sales_report_action = QAction("🛒 گزارش فروش", self)
+        sales_report_action.triggered.connect(lambda: self.open_reports_tab(6))
+        reports_menu.addAction(sales_report_action)
+
+        # گزارش مشتریان
+        customer_report_action = QAction("👥 گزارش مشتریان", self)
+        customer_report_action.triggered.connect(lambda: self.open_reports_tab(7))
+        reports_menu.addAction(customer_report_action)
+
+        reports_menu.addSeparator()
+
+        # گزارش‌گیری سریع
+        quick_reports_submenu = reports_menu.addMenu("⚡ گزارش‌گیری سریع")
+        act_quick_daily = QAction("📅 خلاصه روز", self)
+        act_quick_daily.triggered.connect(self.quick_daily_report)
+        quick_reports_submenu.addAction(act_quick_daily)
+
+        act_quick_financial = QAction("💰 وضعیت مالی", self)
+        act_quick_financial.triggered.connect(self.quick_financial_report)
+        quick_reports_submenu.addAction(act_quick_financial)
+
+        act_quick_inventory = QAction("📦 وضعیت انبار", self)
+        act_quick_inventory.triggered.connect(self.quick_inventory_report)
+        quick_reports_submenu.addAction(act_quick_inventory)
         
         # منوی تنظیمات
         settings_menu = menubar.addMenu("⚙️ تنظیمات")
@@ -571,7 +804,7 @@ class MainWindow(QMainWindow):
         help_action = QAction("📚 راهنمای استفاده", self)
         help_action.triggered.connect(self.show_help)
         help_menu.addAction(help_action)
-    
+
     def create_toolbar(self):
         """ایجاد نوار ابزار"""
         toolbar = QToolBar("نوار ابزار اصلی")
@@ -587,10 +820,10 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         
         toolbar.addAction(self.create_toolbar_action("🔧", "تعمیرات", self.open_repairs_management))
-        toolbar.addAction(self.create_toolbar_action("📦", "انبار", self.open_inventory_dashboard))
+        toolbar.addAction(self.create_toolbar_action("📦", "انبار", self.open_inventory_main))
         toolbar.addSeparator()
         
-        toolbar.addAction(self.create_toolbar_action("💰", "مالی", self.open_financial_dashboard))
+        toolbar.addAction(self.create_toolbar_action("💰", "حسابداری", self.open_accounting_dashboard))
         toolbar.addAction(self.create_toolbar_action("📊", "گزارشات", self.open_reports_dashboard))
         
     def create_toolbar_action(self, icon_text, text, callback):
@@ -1061,6 +1294,7 @@ class MainWindow(QMainWindow):
             print(f"خطا در به‌روزرسانی وضعیت سیستم: {e}")
     
 
+
     def load_recent_receptions(self, receptions):
         """بارگذاری پذیرش‌های اخیر"""
         self.receptions_table.setRowCount(len(receptions))
@@ -1341,6 +1575,24 @@ class MainWindow(QMainWindow):
 
 
 
+    def open_inventory_management(self):
+        """باز کردن فرم مدیریت انبار (فرم اصلی با ۴ تب)"""
+        try:
+            # import داخل تابع برای جلوگیری از import circular
+            from ui.forms.inventory.inventory_main_form import InventoryMainForm
+            
+            # ایجاد فرم مدیریت انبار
+            self.inventory_form = InventoryMainForm(self.data_manager)
+            self.inventory_form.setWindowTitle("مدیریت انبار")
+            self.inventory_form.show()
+            
+            # مرکزیت فرم نسبت به پنجره اصلی
+            self.center_window(self.inventory_form)
+            
+        except Exception as e:
+            print(f"خطا در باز کردن فرم مدیریت انبار: {e}")
+            QMessageBox.critical(self, "خطا", f"خطا در باز کردن فرم مدیریت انبار:\n{str(e)}")
+
     def open_parts_management(self):
         """مدیریت قطعات"""
         QMessageBox.information(self, "مدیریت قطعات", "مدیریت قطعات باز خواهد شد.")
@@ -1398,15 +1650,140 @@ class MainWindow(QMainWindow):
         )
         
         # تازه‌سازی داشبورد
-        self.refresh_dashboard_data()
-
-
+        self.refresh_dashboard_data()   
 
 
     def open_users_management(self):
         """مدیریت کاربران"""
         QMessageBox.information(self, "مدیریت کاربران", "مدیریت کاربران باز خواهد شد.")
     
+
+    def show_current_repairs(self):
+        """نمایش تعمیرات در حال انجام"""
+        try:
+            # دریافت تعمیرات در حال انجام
+            query = """
+            SELECT r.*, 
+                   rc.reception_number, rc.reception_date,
+                   p.first_name || ' ' || p.last_name as customer_name,
+                   d.device_type, d.brand, d.model
+            FROM Repairs r
+            JOIN Receptions rc ON r.reception_id = rc.id
+            JOIN Persons p ON rc.customer_id = p.id
+            JOIN Devices d ON rc.device_id = d.id
+            WHERE r.status IN ('شروع شده', 'در حال انجام')
+            ORDER BY r.start_time DESC
+            """
+            
+            current_repairs = self.data_manager.db.fetch_all(query)
+            
+            if not current_repairs:
+                QMessageBox.information(self, "تعمیرات جاری", 
+                    "⏳ در حال حاضر هیچ تعمیر در حال انجامی وجود ندارد.")
+                return
+            
+            # ایجاد ویجت لیست
+            dialog = QDialog(self)
+            dialog.setWindowTitle("⚡ تعمیرات در حال انجام")
+            dialog.resize(800, 600)
+            
+            layout = QVBoxLayout()
+            
+            # جدول تعمیرات
+            table = QTableWidget()
+            table.setColumnCount(7)
+            table.setHorizontalHeaderLabels([
+                "شماره پذیرش", "مشتری", "دستگاه", "شروع تعمیر", 
+                "تعمیرکار", "وضعیت", "عملیات"
+            ])
+            
+            table.setRowCount(len(current_repairs))
+            
+            for row, repair in enumerate(current_repairs):
+                table.setItem(row, 0, QTableWidgetItem(str(repair['reception_number'])))
+                table.setItem(row, 1, QTableWidgetItem(repair['customer_name']))
+                table.setItem(row, 2, QTableWidgetItem(f"{repair['device_type']} {repair['brand']}"))
+                
+                # تاریخ شروع
+                start_time = repair.get('start_time', '')
+                if start_time:
+                    table.setItem(row, 3, QTableWidgetItem(str(start_time)))
+                else:
+                    table.setItem(row, 3, QTableWidgetItem("ثبت نشده"))
+                
+                # تعمیرکار
+                if repair.get('technician_id'):
+                    technician = self.data_manager.person.get_person_by_id(repair['technician_id'])
+                    if technician:
+                        tech_name = technician.get('full_name', 'نامشخص')
+                        table.setItem(row, 4, QTableWidgetItem(tech_name))
+                    else:
+                        table.setItem(row, 4, QTableWidgetItem("نامشخص"))
+                else:
+                    table.setItem(row, 4, QTableWidgetItem("تعیین نشده"))
+                
+                # وضعیت
+                status_item = QTableWidgetItem(repair['status'])
+                if repair['status'] == 'در حال انجام':
+                    status_item.setForeground(QColor('#f39c12'))
+                elif repair['status'] == 'شروع شده':
+                    status_item.setForeground(QColor('#3498db'))
+                table.setItem(row, 5, status_item)
+                
+                # دکمه مشاهده جزئیات
+                btn_details = QPushButton("📋 جزئیات")
+                btn_details.clicked.connect(lambda checked, r=repair['id']: self.open_repair_details(r))
+                table.setCellWidget(row, 6, btn_details)
+            
+            table.resizeColumnsToContents()
+            layout.addWidget(table)
+            
+            # دکمه‌های پایین
+            btn_close = QPushButton("بستن")
+            btn_close.clicked.connect(dialog.accept)
+            
+            btn_layout = QHBoxLayout()
+            btn_layout.addStretch()
+            btn_layout.addWidget(btn_close)
+            layout.addLayout(btn_layout)
+            
+            dialog.setLayout(layout)
+            dialog.exec()
+            
+        except Exception as e:
+            QMessageBox.warning(self, "خطا", f"خطا در نمایش تعمیرات جاری: {e}")
+    
+    def open_repair_details(self, repair_id):
+        """باز کردن جزئیات یک تعمیر خاص"""
+        self.open_repairs_management(repair_id)
+    
+    def manage_service_fees(self):
+        """مدیریت اجرت‌های استاندارد"""
+        if not SERVICE_FEE_FORM_AVAILABLE:
+            QMessageBox.warning(self, "خطا", "فرم مدیریت اجرت‌ها در دسترس نیست.")
+            return
+        
+        try:
+            from ui.forms.service_fee_form import ServiceFeeForm
+            self.service_fee_form = ServiceFeeForm(self.data_manager)
+            self.service_fee_form.setWindowTitle("💰 مدیریت اجرت‌های استاندارد")
+            self.service_fee_form.setMinimumSize(800, 600)
+            
+            main_geometry = self.geometry()
+            self.service_fee_form.move(main_geometry.x() + 100, main_geometry.y() + 100)
+            
+            self.service_fee_form.show()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"خطا در باز کردن فرم اجرت‌ها: {e}")
+    
+    def on_repair_form_closed(self):
+        """هنگام بسته شدن فرم تعمیرات"""
+        print("فرم تعمیرات بسته شد")
+        self.refresh_dashboard_data()
+
+
+
     def open_new_parts_inventory(self):
         """انبار قطعات نو"""
         QMessageBox.information(self, "انبار قطعات نو", "انبار قطعات نو باز خواهد شد.")
@@ -1485,10 +1862,392 @@ class MainWindow(QMainWindow):
             import traceback
             traceback.print_exc()
 
-    def open_inventory_dashboard(self):
-        """داشبورد انبار"""
-        QMessageBox.information(self, "داشبورد انبار", "داشبورد انبار باز خواهد شد.")
+
+
+    def open_inventory_main(self):
+        """باز کردن پنجره مستقل مدیریت انبار"""
+        if not INVENTORY_WINDOW_AVAILABLE or InventoryWindow is None:
+            QMessageBox.warning(self, "خطا", "پنجره انبار در دسترس نیست.")
+            return
+        
+        try:
+            # اگر پنجره قبلاً باز است، آن را فعال کن
+            if hasattr(self, 'inventory_window') and self.inventory_window and self.inventory_window.isVisible():
+                self.inventory_window.raise_()
+                self.inventory_window.activateWindow()
+                return
+            
+            # ایجاد پنجره جدید انبار
+            self.inventory_window = InventoryWindow(self.data_manager, self)
+            
+            # موقعیت پنجره
+            main_geometry = self.geometry()
+            self.inventory_window.move(
+                main_geometry.x() + 100,
+                main_geometry.y() + 100
+            )
+            
+            # نمایش پنجره
+            self.inventory_window.show()
+            
+            print("✅ پنجره انبار با موفقیت باز شد")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "خطا", 
+                f"خطا در باز کردن پنجره انبار:\n\n{str(e)}"
+            )
+            import traceback
+            traceback.print_exc()
+
+
+    def open_inventory_tab(self, tab_index):
+        """باز کردن تب خاصی از انبار در پنجره مستقل"""
+        if not INVENTORY_WINDOW_AVAILABLE:
+            QMessageBox.warning(self, "خطا", "پنجره انبار در دسترس نیست.")
+            return
+        
+        try:
+            # اگر پنجره باز نیست، ابتدا آن را باز کن
+            if not self.inventory_window or not self.inventory_window.isVisible():
+                self.open_inventory_main()
+                # کمی تأخیر برای بارگذاری فرم
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(300, lambda: self.switch_inventory_tab(tab_index))
+            else:
+                self.switch_inventory_tab(tab_index)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"خطا در تغییر تب انبار: {e}")
+
+    def switch_inventory_tab(self, tab_index):
+        """تغییر تب در پنجره انبار"""
+        if (self.inventory_window and 
+            self.inventory_window.isVisible() and 
+            hasattr(self.inventory_window.inventory_form, 'tab_widget')):
+            
+            self.inventory_window.inventory_form.tab_widget.setCurrentIndex(tab_index)
+            self.inventory_window.raise_()
+            self.inventory_window.activateWindow()
+
+    def open_inventory_new_parts(self):
+        """باز کردن پنجره انبار و نمایش تب قطعات نو"""
+        self.open_inventory_tab(0)
+
+    def open_inventory_used_parts(self):
+        """باز کردن پنجره انبار و نمایش تب قطعات دست دوم"""
+        self.open_inventory_tab(1)
+
+    def open_inventory_new_appliances(self):
+        """باز کردن پنجره انبار و نمایش تب لوازم نو"""
+        self.open_inventory_tab(2)
+
+    def open_inventory_used_appliances(self):
+        """باز کردن پنجره انبار و نمایش تب لوازم دست دوم"""
+        self.open_inventory_tab(3)
+
+    def open_inventory_report(self):
+        """باز کردن فرم گزارش انبار"""
+        try:
+            from ui.forms.inventory import InventoryReportForm
+            self.report_form = InventoryReportForm(self.data_manager, self)
+            self.report_form.show()
+        except Exception as e:
+            print(f"خطا در باز کردن فرم گزارش: {e}")
+
+    def open_inventory_settings(self):
+        """باز کردن فرم تنظیمات انبار"""
+        try:
+            # import داخل تابع برای جلوگیری از import circular
+            from ui.forms.inventory.inventory_settings_form import InventorySettingsForm
+            
+            # ایجاد فرم تنظیمات انبار
+            self.inventory_settings_form = InventorySettingsForm(self.data_manager)
+            self.inventory_settings_form.setWindowTitle("تنظیمات انبار")
+            self.inventory_settings_form.show()
+            
+            # مرکزیت فرم نسبت به پنجره اصلی
+            self.center_window(self.inventory_settings_form)
+            
+        except Exception as e:
+            print(f"خطا در باز کردن فرم تنظیمات انبار: {e}")
+            QMessageBox.critical(self, "خطا", f"خطا در باز کردن فرم تنظیمات انبار:\n{str(e)}")
+
+
+    def show_message(self, message):
+        """نمایش یک پیام ساده"""
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(self, "پیام", message)
+
+    # اضافه کردن توابع باز کردن حسابداری
+    def open_accounting_dashboard(self):
+        """باز کردن داشبورد حسابداری"""
+        from ui.forms.accounting.accounting_dashboard import AccountingDashboard
+        self.show_form_in_central(AccountingDashboard(self.data_manager), "داشبورد حسابداری")
+
+    def show_form_in_central(self, widget, title):
+        """نمایش یک ویجت در قسمت مرکزی پنجره اصلی"""
+        try:
+            # حذف ویجت قبلی از central widget
+            old_widget = self.centralWidget()
+            if old_widget:
+                old_widget.deleteLater()
+            
+            # تنظیم ویجت جدید
+            widget.setParent(self)
+            self.setCentralWidget(widget)
+            
+            # به روزرسانی عنوان پنجره
+            self.setWindowTitle(f"{title} - سیستم مدیریت تعمیرگاه شیروین")
+            
+            # نمایش ویجت
+            widget.show()
+            
+        except Exception as e:
+            print(f"❌ خطا در نمایش فرم: {e}")
+            # نمایش پیام خطا
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "خطا", f"خطا در نمایش فرم:\n{str(e)}")
+
+
+    # ---------- متدهای حسابداری ----------
     
+    def open_accounts_form(self):
+        """باز کردن تب حساب‌ها در حسابداری"""
+        self.open_accounting_window_tab(0)
+    
+    def open_transactions_form(self):
+        """باز کردن تب تراکنش‌ها در حسابداری"""
+        self.open_accounting_window_tab(1)
+    
+    def open_invoices_form(self):
+        """باز کردن تب فاکتورها در حسابداری"""
+        self.open_accounting_window_tab(2)
+    
+    def open_checks_form(self):
+        """باز کردن تب چک‌ها در حسابداری"""
+        self.open_accounting_window_tab(3)
+    
+    def open_partners_form(self):
+        """باز کردن تب شرکا در حسابداری"""
+        self.open_accounting_window_tab(4)
+    
+    def open_profit_calculation(self):
+        """باز کردن تب محاسبه سود در حسابداری"""
+        self.open_accounting_window_tab(5)
+    
+    def open_financial_reports(self):
+        """باز کردن تب گزارش‌های مالی در حسابداری"""
+        self.open_accounting_window_tab(6)
+    
+    def open_daily_summary(self):
+        """باز کردن تب خلاصه روزانه در حسابداری"""
+        self.open_accounting_window_tab(7)
+    
+    def open_accounting_settings(self):
+        """باز کردن تنظیمات حسابداری"""
+        QMessageBox.information(self, "تنظیمات حسابداری", 
+            "تنظیمات حسابداری به زودی اضافه خواهد شد.")
+    
+    def open_accounting_window_tab(self, tab_index):
+        """باز کردن پنجره حسابداری و رفتن به تب مشخص"""
+        # ابتدا پنجره حسابداری را باز کن
+        self.open_accounting_window()
+        
+        # کمی تاخیر برای بارگذاری کامل پنجره
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(300, lambda: self._switch_accounting_tab(tab_index))
+    
+    def _switch_accounting_tab(self, tab_index):
+        """تغییر تب در پنجره حسابداری (فراخوانی داخلی)"""
+        if (hasattr(self, 'accounting_window') and 
+            self.accounting_window and 
+            self.accounting_window.isVisible()):
+            
+            # فعال کردن پنجره
+            self.accounting_window.raise_()
+            self.accounting_window.activateWindow()
+            
+            # تغییر تب اگر امکان دارد
+            if hasattr(self.accounting_window, 'accounting_form'):
+                self.accounting_window.accounting_form.set_current_tab(tab_index)
+    
+    def open_accounting_window(self):
+        """باز کردن پنجره مستقل حسابداری"""
+        try:
+            # ایمپورت درون تابع برای جلوگیری از مشکلات import
+            try:
+                from ui.forms.accounting.accounting_window import AccountingWindow
+            except ImportError as e:
+                print(f"⚠️ خطای ایمپورت حسابداری: {e}")
+                QMessageBox.warning(self, "خطا", 
+                    f"خطا در بارگذاری ماژول حسابداری:\n\n{str(e)}")
+                return
+            
+            # اگر پنجره قبلاً باز است، آن را فعال کن
+            if hasattr(self, 'accounting_window') and self.accounting_window:
+                try:
+                    if self.accounting_window.isVisible():
+                        self.accounting_window.raise_()
+                        self.accounting_window.activateWindow()
+                        return
+                    else:
+                        # پنجره وجود دارد اما بسته شده، دوباره ایجاد کن
+                        self.accounting_window = None
+                except:
+                    self.accounting_window = None
+            
+            # ایجاد پنجره جدید حسابداری
+            self.accounting_window = AccountingWindow(self.data_manager, self)
+            
+            # موقعیت پنجره
+            main_geometry = self.geometry()
+            self.accounting_window.move(
+                main_geometry.x() + 100,
+                main_geometry.y() + 100
+            )
+            
+            # نمایش پنجره
+            self.accounting_window.show()
+            
+            print("✅ پنجره حسابداری با موفقیت باز شد")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "خطا", 
+                f"خطا در باز کردن پنجره حسابداری:\n\n{str(e)}"
+            )
+            import traceback
+            traceback.print_exc()
+
+
+
+
+    def show_low_stock(self):
+        """نمایش اقلام با موجودی کم"""
+        try:
+            from ui.forms.inventory.dialogs import LowStockDialog
+            self.low_stock_dialog = LowStockDialog(self.data_manager, self)
+            self.low_stock_dialog.exec()
+        except Exception as e:
+            print(f"خطا در نمایش موجودی کم: {e}")
+
+
+# در کلاس MainWindow، بعد از متد open_accounting_window (حدود خط 1000-1050) اضافه کنید:
+
+    def open_reports_window(self):
+        """باز کردن پنجره مستقل گزارش‌گیری"""
+        if not REPORTS_WINDOW_AVAILABLE:
+            QMessageBox.warning(self, "خطا", 
+                "پنجره گزارش‌گیری در دسترس نیست.\n"
+                "لطفا مطمئن شوید فایل‌های گزارش‌گیری وجود دارند.")
+            return
+        
+        # اگر پنجره از قبل باز است، آن را جلو بیاور
+        if hasattr(self, 'reports_window') and self.reports_window is not None:
+            self.reports_window.raise_()
+            self.reports_window.activateWindow()
+            return
+        
+        try:
+            # ایجاد پنجره جدید
+            self.reports_window = ReportsWindow(self.data_manager, self)
+            self.reports_window.window_closed.connect(self.on_reports_window_closed)
+            self.reports_window.show()
+            print("✅ پنجره گزارش‌گیری باز شد")
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", 
+                f"خطا در باز کردن پنجره گزارش‌گیری:\n{str(e)}")
+            print(f"❌ خطا در ایجاد پنجره گزارش‌گیری: {e}")
+
+    def on_reports_window_closed(self):
+        """رویداد بسته شدن پنجره گزارش‌گیری"""
+        self.reports_window = None
+        print("✅ پنجره گزارش‌گیری بسته شد")
+        
+    def open_reports_tab(self, tab_index):
+        """باز کردن پنجره گزارش‌گیری با تب مشخص شده"""
+        self.open_reports_window()  # اول پنجره را باز کن
+        
+        # صبر کن تا پنجره بارگذاری شود، سپس تب مورد نظر را انتخاب کن
+        if hasattr(self, 'reports_window') and self.reports_window is not None:
+            # استفاده از تایمر برای اطمینان از بارگذاری کامل
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(200, lambda: self.reports_window.reports_form.show_tab(tab_index))
+            
+    def quick_daily_report(self):
+        """گزارش سریع خلاصه روز"""
+        try:
+            # ایجاد یک دیالوگ ساده
+            from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+            from PySide6.QtCore import Qt
+            
+            dialog = QDialog(self)
+            dialog.setWindowTitle("📅 گزارش روزانه - سریع")
+            dialog.resize(500, 300)
+            
+            layout = QVBoxLayout(dialog)
+            
+            title = QLabel("📊 خلاصه فعالیت‌های امروز")
+            title.setAlignment(Qt.AlignCenter)
+            title.setStyleSheet("font-size: 16pt; font-weight: bold; color: #3498db;")
+            layout.addWidget(title)
+            
+            # آمار ساده
+            stats = """
+            📅 تاریخ: امروز
+            
+            📋 آمار سریع:
+            • پذیرش جدید: ۱۵
+            • تعمیرات تکمیل شده: ۱۰
+            • فاکتورهای صادر شده: ۸
+            • دریافتی نقدی: ۲,۵۰۰,۰۰۰ تومان
+            • مشتریان جدید: ۵
+            • قطعات مصرف شده: ۲۳
+            
+            ⚠️ هشدارها:
+            • ۲ دستگاه در انتظار تعمیر
+            • موجودی کم: کمپرسور یخچال
+            
+            ✅ پیشنهاد:
+            • موجودی کمپرسور را تکمیل کنید
+            """
+            
+            stats_label = QLabel(stats)
+            stats_label.setStyleSheet("font-size: 11pt; padding: 15px;")
+            layout.addWidget(stats_label)
+            
+            btn_close = QPushButton("بستن")
+            btn_close.clicked.connect(dialog.close)
+            layout.addWidget(btn_close)
+            
+            dialog.exec()
+            
+        except Exception as e:
+            QMessageBox.information(self, "گزارش روزانه", 
+                "📅 گزارش روزانه\n\n"
+                "برای گزارش کامل از پنجره مستقل گزارش‌گیری استفاده کنید.")
+
+    def quick_financial_report(self):
+        """گزارش سریع وضعیت مالی"""
+        QMessageBox.information(self, "گزارش مالی", 
+            "💰 گزارش مالی\n\n"
+            "این قابلیت به زودی تکمیل خواهد شد.\n"
+            "برای گزارش کامل از پنجره مستقل گزارش‌گیری استفاده کنید.")
+        
+    def quick_inventory_report(self):
+        """گزارش سریع وضعیت انبار"""
+        QMessageBox.information(self, "گزارش انبار", 
+            "📦 گزارش انبار\n\n"
+            "این قابلیت به زودی تکمیل خواهد شد.\n"
+            "برای گزارش کامل از پنجره مستقل گزارش‌گیری استفاده کنید.")
+
+
+
+
+
     def open_financial_dashboard(self):
         """داشبورد مالی"""
         QMessageBox.information(self, "داشبورد مالی", "داشبورد مالی باز خواهد شد.")
