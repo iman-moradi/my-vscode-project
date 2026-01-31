@@ -4,12 +4,18 @@ from PySide6.QtWidgets import (
     QPushButton, QTabWidget, QTableWidget, QTableWidgetItem,
     QToolBar, QStatusBar, QMenuBar, QMenu, QFrame, QSplitter,
     QTreeWidget, QTreeWidgetItem, QDockWidget, QMessageBox,
-    QApplication, QStyleFactory, QListWidget, QListWidgetItem,QDialog
+    QApplication, QStyleFactory, QListWidget, QListWidgetItem,
+    QDialog, QScrollArea, QSizePolicy, QSpacerItem
 )
 from PySide6.QtCore import Qt, QTimer, QDate, QSize
 from PySide6.QtGui import QIcon, QAction, QFont, QPixmap, QColor
 import jdatetime
 from datetime import datetime, timedelta
+from modules.dashboard_manager import DashboardManager
+from ui.widgets.dashboard.stats_cards_widget import StatsCardsWidget
+from ui.widgets.dashboard.charts_widget import ChartsWidget
+from ui.widgets.dashboard.alerts_widget import AlertsWidget
+from ui.widgets.dashboard.quick_lists_widget import QuickListsWidget
 
 
 # در ابتدای main_window.py، بعد از دیگر ایمپورت‌ها:
@@ -125,6 +131,11 @@ def convert_to_jalali_display(date_str):
 
 class MainWindow(QMainWindow):
     """پنجره اصلی برنامه"""
+
+# در فایل ui/main_window.py، کلاس MainWindow را بررسی و اصلاح کنید:
+
+class MainWindow(QMainWindow):
+    """پنجره اصلی برنامه"""
     
     def __init__(self, user_data, data_manager):
         super().__init__()
@@ -132,10 +143,512 @@ class MainWindow(QMainWindow):
         self.data_manager = data_manager
         self.inventory_window = None
         self.accounting_windows = {}
+        
+        # 🔴 اضافه کردن DashboardManager
+        try:
+            from modules.dashboard_manager import DashboardManager
+            self.dashboard_manager = DashboardManager(data_manager)
+        except ImportError as e:
+            print(f"⚠️ خطا در بارگذاری DashboardManager: {e}")
+            self.dashboard_manager = None
+        
         self.init_ui()
         self.setup_connections()
         self.load_initial_data()
+    
+    def init_ui(self):
+        """راه‌اندازی رابط کاربری"""
+        self.setWindowTitle("سیستم مدیریت تعمیرگاه لوازم خانگی شیروین")
         
+        # 🔴 **کاهش ارتفاع برای جلوگیری از خطای geometry**
+        # محاسبه اندازه صفحه نمایش
+        screen = QApplication.primaryScreen().availableGeometry()
+        
+        # تنظیم اندازه ایمن که در همه مانیتورها کار کند
+        safe_width = min(1400, screen.width() - 100)
+        safe_height = min(900, screen.height() - 150)
+        
+        # موقعیت پنجره (مرکز)
+        x = (screen.width() - safe_width) // 2
+        y = (screen.height() - safe_height) // 2
+        
+        self.setGeometry(x, y, safe_width, safe_height)
+        
+        # 🔴 **راست‌چین کردن کل پنجره**
+        self.setLayoutDirection(Qt.RightToLeft)
+
+        # تنظیم استایل کلی
+        self.setStyleSheet(self.get_style_sheet())
+        
+        # تنظیم فونت
+        self.set_fonts()
+        
+        # ایجاد المان‌های اصلی
+        self.create_menu_bar()
+        self.create_toolbar()
+        self.create_status_bar()
+        
+        # 🔴 **ایجاد داشبورد**
+        self.create_dashboard()
+        
+        self.create_side_panel()
+        
+        # نمایش اطلاعات کاربر
+        self.show_user_info()
+        
+        # 🔴 **تنظیم سیاست اندازه**
+        self.setMinimumSize(800, 600)
+
+    def create_dashboard(self):
+        """ایجاد داشبورد اصلی با ویجت‌های جدید"""
+        # ایجاد ویجت مرکزی اصلی
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # ایجاد layout اصلی برای ویجت مرکزی
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # ایجاد ویجت اسکرول
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # تنظیم استایل برای اسکرول
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: #000000;
+            }
+            QScrollBar:vertical {
+                background-color: #2c2c2c;
+                width: 12px;
+                border-radius: 6px;
+                margin: 2px 0px 2px 0px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #3498db;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #2980b9;
+            }
+        """)
+        
+        # ویجت محتوای داخل اسکرول
+        content_widget = QWidget()
+        scroll_area.setWidget(content_widget)
+        
+        # لایه برای محتوای داخل اسکرول
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(15, 15, 15, 15)  # حاشیه داخلی
+        content_layout.setSpacing(15)
+        
+        # عنوان داشبورد
+        dashboard_title = QLabel("📊 داشبورد مدیریت - تعمیرگاه شیروین")
+        dashboard_title.setStyleSheet("""
+            QLabel {
+                font-size: 22px;
+                font-weight: bold;
+                color: white;
+                padding-bottom: 15px;
+                border-bottom: 3px solid #3498db;
+                margin-bottom: 10px;
+            }
+        """)
+        content_layout.addWidget(dashboard_title)
+        
+        # ویجت کارت‌های آماری (اگر موجود است)
+        if self.dashboard_manager:
+            try:
+                from ui.widgets.dashboard.stats_cards_widget import StatsCardsWidget
+                self.stats_widget = StatsCardsWidget()
+                self.stats_widget.set_dashboard_manager(self.dashboard_manager)
+                content_layout.addWidget(self.stats_widget)
+            except ImportError as e:
+                print(f"⚠️ خطا در بارگذاری StatsCardsWidget: {e}")
+                # نمایش کارت‌های آماری ساده
+                stats_widget = self.create_stats_widget()
+                content_layout.addWidget(stats_widget)
+        else:
+            # نمایش کارت‌های آماری ساده
+            stats_widget = self.create_stats_widget()
+            content_layout.addWidget(stats_widget)
+        
+        # ویجت نمودارها (اگر موجود است)
+        if self.dashboard_manager:
+            try:
+                from ui.widgets.dashboard.charts_widget import ChartsWidget
+                self.charts_widget = ChartsWidget()
+                self.charts_widget.set_dashboard_manager(self.dashboard_manager)
+                content_layout.addWidget(self.charts_widget)
+            except ImportError as e:
+                print(f"⚠️ خطا در بارگذاری ChartsWidget: {e}")
+                # نمایش نمودارهای ساده
+                self.show_simple_charts(content_layout)
+        else:
+            # نمایش نمودارهای ساده
+            self.show_simple_charts(content_layout)
+        
+        # ردیف پایینی (هشدارها و لیست‌های سریع)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setSpacing(15)
+        
+        # ویجت هشدارها (اگر موجود است)
+        if self.dashboard_manager:
+            try:
+                from ui.widgets.dashboard.alerts_widget import AlertsWidget
+                self.alerts_widget = AlertsWidget()
+                self.alerts_widget.set_dashboard_manager(self.dashboard_manager)
+                self.alerts_widget.alert_action_triggered.connect(self.on_alert_action)
+                bottom_layout.addWidget(self.alerts_widget, 2)
+            except ImportError as e:
+                print(f"⚠️ خطا در بارگذاری AlertsWidget: {e}")
+                # نمایش هشدارهای ساده
+                self.show_simple_alerts(bottom_layout)
+        else:
+            # نمایش هشدارهای ساده
+            self.show_simple_alerts(bottom_layout)
+        
+        # ویجت لیست‌های سریع (اگر موجود است)
+        if self.dashboard_manager:
+            try:
+                from ui.widgets.dashboard.quick_lists_widget import QuickListsWidget
+                self.quick_lists_widget = QuickListsWidget()
+                self.quick_lists_widget.set_dashboard_manager(self.dashboard_manager)
+                self.quick_lists_widget.list_action_triggered.connect(self.on_list_action)
+                bottom_layout.addWidget(self.quick_lists_widget, 3)
+            except ImportError as e:
+                print(f"⚠️ خطا در بارگذاری QuickListsWidget: {e}")
+                # نمایش لیست‌های ساده
+                self.show_simple_lists(bottom_layout)
+        else:
+            # نمایش لیست‌های ساده
+            self.show_simple_lists(bottom_layout)
+        
+        content_layout.addLayout(bottom_layout)
+        
+        # اضافه کردن اسپیسر برای ایجاد فاصله از پایین (20 پیکسل)
+        content_layout.addStretch(1)
+        
+        # افزودن اسکرول به لایه اصلی
+        main_layout.addWidget(scroll_area)
+        
+        # برای اطمینان از نمایش اسکرول، به content_widget ارتفاع زیاد می‌دهیم
+        content_widget.setMinimumHeight(1800)  # ارتفاع زیاد برای فعال کردن اسکرول
+        
+        # بارگذاری اولیه داده‌ها
+        self.load_dashboard_data()
+
+    def show_simple_charts(self, layout):
+        """نمایش نمودارهای ساده (برای وقتی که ویجت‌های جدید موجود نیستند)"""
+        # ایجاد فریم برای نمودارها
+        charts_frame = QFrame()
+        charts_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border-radius: 10px;
+                border: 1px solid #333;
+                padding: 15px;
+            }
+        """)
+        
+        charts_layout = QVBoxLayout()
+        
+        charts_title = QLabel("📊 نمودارهای وضعیت")
+        charts_title.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                color: white;
+                padding-bottom: 10px;
+            }
+        """)
+        charts_layout.addWidget(charts_title)
+        
+        # یک پیام ساده
+        message_label = QLabel("ویجت نمودارها در حال حاضر در دسترس نیست. لطفاً بعداً تلاش کنید.")
+        message_label.setStyleSheet("color: #bbb; font-style: italic; padding: 20px;")
+        message_label.setAlignment(Qt.AlignCenter)
+        charts_layout.addWidget(message_label)
+        
+        charts_frame.setLayout(charts_layout)
+        layout.addWidget(charts_frame)
+    
+    def show_simple_alerts(self, layout):
+        """نمایش هشدارهای ساده"""
+        alerts_frame = QFrame()
+        alerts_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border-radius: 10px;
+                border: 1px solid #333;
+                padding: 15px;
+            }
+        """)
+        
+        alerts_layout = QVBoxLayout()
+        
+        alerts_title = QLabel("⚠️ هشدارها و اعلان‌ها")
+        alerts_title.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                color: #f39c12;
+                padding-bottom: 10px;
+            }
+        """)
+        alerts_layout.addWidget(alerts_title)
+        
+        # بارگذاری هشدارهای واقعی از دیتابیس
+        self.load_simple_alerts(alerts_layout)
+        
+        alerts_frame.setLayout(alerts_layout)
+        layout.addWidget(alerts_frame)
+    
+    def load_simple_alerts(self, layout):
+        """بارگذاری هشدارهای ساده از دیتابیس"""
+        try:
+            # چک‌های سررسید نزدیک
+            due_checks = self.data_manager.check_manager.get_checks_due_soon(days=3)
+            if due_checks:
+                checks_label = QLabel(f"💳 {len(due_checks)} چک در سررسید نزدیک")
+                checks_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+                layout.addWidget(checks_label)
+            
+            # پذیرش‌های فوری
+            query = """
+            SELECT COUNT(*) as count
+            FROM Receptions 
+            WHERE priority IN ('فوری', 'خیلی فوری')
+            AND status IN ('در انتظار', 'در حال تعمیر')
+            """
+            urgent_receptions = self.data_manager.db.fetch_one(query)
+            if urgent_receptions and urgent_receptions['count'] > 0:
+                urgent_label = QLabel(f"🚨 {urgent_receptions['count']} پذیرش فوری")
+                urgent_label.setStyleSheet("color: #f39c12; font-weight: bold;")
+                layout.addWidget(urgent_label)
+            
+            # موجودی کم
+            query = """
+            SELECT COUNT(*) as count
+            FROM Parts p
+            LEFT JOIN (
+                SELECT part_id, SUM(quantity) as total_qty 
+                FROM NewPartsWarehouse 
+                WHERE status = 'موجود'
+                GROUP BY part_id
+            ) np ON p.id = np.part_id
+            LEFT JOIN (
+                SELECT part_id, SUM(quantity) as total_qty 
+                FROM UsedPartsWarehouse 
+                WHERE status = 'موجود'
+                GROUP BY part_id
+            ) up ON p.id = up.part_id
+            WHERE COALESCE(np.total_qty, 0) + COALESCE(up.total_qty, 0) < p.min_stock
+            """
+            low_stock = self.data_manager.db.fetch_one(query)
+            if low_stock and low_stock['count'] > 0:
+                stock_label = QLabel(f"📦 {low_stock['count']} قطعه با موجودی کم")
+                stock_label.setStyleSheet("color: #d35400; font-weight: bold;")
+                layout.addWidget(stock_label)
+            
+        except Exception as e:
+            print(f"خطا در بارگذاری هشدارها: {e}")
+    
+    def show_simple_lists(self, layout):
+        """نمایش لیست‌های ساده"""
+        lists_frame = QFrame()
+        lists_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border-radius: 10px;
+                border: 1px solid #333;
+                padding: 15px;
+            }
+        """)
+        
+        lists_layout = QVBoxLayout()
+        
+        lists_title = QLabel("⚡ دسترسی سریع")
+        lists_title.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                color: #3498db;
+                padding-bottom: 10px;
+            }
+        """)
+        lists_layout.addWidget(lists_title)
+        
+        # دکمه‌های سریع
+        quick_buttons = [
+            ("📝 پذیرش جدید", self.new_reception),
+            ("👤 مشتری جدید", lambda: self.open_persons_management()),
+            ("🔧 ثبت تعمیر", self.open_repairs_management),
+            ("📦 ورود به انبار", self.open_inventory_main),
+            ("🧾 صدور فاکتور", self.new_invoice),
+            ("💳 مدیریت چک‌ها", self.open_checks_form)
+        ]
+        
+        for text, callback in quick_buttons:
+            btn = QPushButton(text)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2c3e50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 10px;
+                    margin: 5px;
+                    text-align: right;
+                    font-size: 12px;
+                }
+                QPushButton:hover {
+                    background-color: #34495e;
+                }
+            """)
+            btn.clicked.connect(callback)
+            lists_layout.addWidget(btn)
+        
+        lists_layout.addStretch()
+        lists_frame.setLayout(lists_layout)
+        layout.addWidget(lists_frame)
+    
+    def load_dashboard_data(self):
+        """بارگذاری داده‌های داشبورد"""
+        # اگر DashboardManager موجود است، از آن استفاده کن
+        if self.dashboard_manager:
+            QTimer.singleShot(100, self.refresh_dashboard_data)
+        else:
+            # در غیر این صورت، از روش قدیمی استفاده کن
+            self.refresh_old_dashboard_data()
+    
+    def refresh_dashboard_data(self):
+        """بروزرسانی داده‌های داشبورد جدید"""
+        try:
+            if not self.dashboard_manager:
+                return
+            
+            print("🔄 بروزرسانی داشبورد...")
+            
+            # دریافت داده‌های داشبورد
+            dashboard_data = self.dashboard_manager.get_dashboard_data()
+            
+            # بروزرسانی کارت‌های آماری
+            if hasattr(self, 'stats_widget') and 'stats' in dashboard_data:
+                self.stats_widget.update_stats(dashboard_data['stats'])
+            
+            # بروزرسانی نمودارها
+            if hasattr(self, 'charts_widget') and 'charts' in dashboard_data:
+                self.charts_widget.update_charts(dashboard_data['charts'])
+            
+            # بروزرسانی هشدارها
+            if hasattr(self, 'alerts_widget') and 'alerts' in dashboard_data:
+                self.alerts_widget.update_alerts(dashboard_data['alerts'])
+            
+            # بروزرسانی لیست‌های سریع
+            if hasattr(self, 'quick_lists_widget') and 'quick_lists' in dashboard_data:
+                self.quick_lists_widget.update_lists(dashboard_data['quick_lists'])
+            
+            print("✅ داشبورد بروزرسانی شد")
+            
+        except Exception as e:
+            print(f"❌ خطا در بروزرسانی داشبورد: {e}")
+    
+    def refresh_old_dashboard_data(self):
+        """بروزرسانی داده‌های داشبورد قدیمی"""
+        try:
+            # 🔴 **آمار پذیرش‌های امروز**
+            today = datetime.now().date()
+            today_str = today.strftime('%Y-%m-%d')
+            
+            # همه پذیرش‌ها را بگیر
+            all_receptions = self.data_manager.reception.get_all_receptions()
+            
+            # شمارش پذیرش‌های امروز
+            today_count = 0
+            for reception in all_receptions:
+                rec_date = reception.get('reception_date', '')
+                if rec_date and str(rec_date).startswith(today_str):
+                    today_count += 1
+            
+            # 🔴 **دستگاه‌های در حال تعمیر**
+            repairing_count = 0
+            for reception in all_receptions:
+                if reception.get('status') == 'در حال تعمیر':
+                    repairing_count += 1
+            
+            # 🔴 **قطعات با موجودی کم**
+            low_stock_parts = self.data_manager.part.get_low_stock_parts()
+            low_stock_count = len(low_stock_parts)
+            
+            # 🔴 **چک‌های در سررسید**
+            due_checks = self.data_manager.check_manager.get_checks_due_soon(days=7)
+            due_checks_count = len(due_checks) if due_checks else 0
+            
+            # به‌روزرسانی ویجت‌های داشبورد
+            self.update_dashboard_widgets(today_count, repairing_count, low_stock_count, due_checks_count)
+            
+            # بارگذاری پذیرش‌های اخیر
+            recent_receptions = all_receptions[:10] if len(all_receptions) > 10 else all_receptions
+            
+            # بارگذاری چک‌های در سررسید
+            if hasattr(self, 'checks_table'):
+                self.load_due_checks(due_checks)
+                
+        except Exception as e:
+            print(f"خطا در به‌روزرسانی داشبورد: {e}")
+    
+    def on_alert_action(self, data):
+        """مدیریت عمل روی هشدار"""
+        try:
+            alert_type = data.get('type')
+            alert_data = data.get('alert_data', {})
+            action = alert_data.get('action', '')
+            
+            if alert_type == 'alert_action':
+                if action == 'receptions':
+                    self.open_reception_management()
+                elif action == 'inventory':
+                    self.open_inventory_main()
+                elif action == 'checks':
+                    self.open_checks_form()
+                elif action == 'customers':
+                    self.open_persons_management()
+                elif action == 'repairs':
+                    self.open_repairs_management()
+            
+            print(f"📝 عمل روی هشدار: {action}")
+            
+        except Exception as e:
+            print(f"خطا در مدیریت هشدار: {e}")
+    
+    def on_list_action(self, data):
+        """مدیریت عمل روی لیست"""
+        try:
+            action_type = data.get('type')
+            list_type = data.get('list_type', '')
+            
+            if action_type == 'view_more':
+                if 'پذیرش' in list_type:
+                    self.open_reception_management()
+                elif 'چک' in list_type:
+                    self.open_checks_form()
+                elif 'موجودی' in list_type:
+                    self.open_inventory_main()
+                elif 'مشتری' in list_type:
+                    self.open_persons_management()
+            
+            print(f"📝 عمل روی لیست: {list_type}")
+            
+        except Exception as e:
+            print(f"خطا در مدیریت لیست: {e}")
+
+
     def clear_central_widget(self):
         """پاک کردن ویجت مرکزی فعلی"""
         old_widget = self.centralWidget()
@@ -198,31 +711,7 @@ class MainWindow(QMainWindow):
         # تنظیم عنوان
         self.setWindowTitle("سیستم مدیریت تعمیرگاه لوازم خانگی شیروین")
 
-
-    def init_ui(self):
-        """راه‌اندازی رابط کاربری"""
-        self.setWindowTitle("سیستم مدیریت تعمیرگاه لوازم خانگی شیروین")
-        self.setGeometry(100, 50, 1400, 800)
-        
-        # 🔴 **راست‌چین کردن کل پنجره**
-        self.setLayoutDirection(Qt.RightToLeft)
-
-        # تنظیم استایل کلی
-        self.setStyleSheet(self.get_style_sheet())
-        
-        # تنظیم فونت
-        self.set_fonts()
-        
-        # ایجاد المان‌های اصلی
-        self.create_menu_bar()
-        self.create_toolbar()
-        self.create_status_bar()
-        self.create_central_widget()
-        self.create_side_panel()
-        
-        # نمایش اطلاعات کاربر
-        self.show_user_info()
-        
+       
     def get_style_sheet(self):
         """استایل‌شیت برنامه با تم تاریک (نسخه اصلاح شده بدون layout-direction)"""
         return """
@@ -785,14 +1274,38 @@ class MainWindow(QMainWindow):
         
         # منوی تنظیمات
         settings_menu = menubar.addMenu("⚙️ تنظیمات")
-        
-        app_settings_action = QAction("🎛️ تنظیمات برنامه", self)
-        app_settings_action.triggered.connect(self.open_app_settings)
-        settings_menu.addAction(app_settings_action)
-        
-        sms_settings_action = QAction("📱 تنظیمات پیامکی", self)
-        sms_settings_action.triggered.connect(self.open_sms_settings)
-        settings_menu.addAction(sms_settings_action)
+
+        # تنظیمات کلی
+        act_general_settings = QAction("⚙️ تنظیمات کلی", self)
+        act_general_settings.triggered.connect(self.open_settings_window)
+        settings_menu.addAction(act_general_settings)
+
+        settings_menu.addSeparator()
+
+        # مدیریت کاربران
+        act_user_management = QAction("👥 مدیریت کاربران", self)
+        act_user_management.triggered.connect(lambda: self.open_settings_window("users"))
+        settings_menu.addAction(act_user_management)
+
+        # پشتیبان‌گیری
+        act_backup_settings = QAction("💾 تنظیمات پشتیبان", self)
+        act_backup_settings.triggered.connect(lambda: self.open_settings_window("backup"))
+        settings_menu.addAction(act_backup_settings)
+
+        # تنظیمات پیامکی
+        act_sms_settings = QAction("📱 تنظیمات پیامکی", self)
+        act_sms_settings.triggered.connect(lambda: self.open_settings_window("sms"))
+        settings_menu.addAction(act_sms_settings)
+
+        # تنظیمات انبار
+        act_inventory_settings = QAction("📦 تنظیمات انبار", self)
+        act_inventory_settings.triggered.connect(lambda: self.open_settings_window("inventory"))
+        settings_menu.addAction(act_inventory_settings)
+
+        # تنظیمات امنیتی
+        act_security_settings = QAction("🔐 تنظیمات امنیتی", self)
+        act_security_settings.triggered.connect(lambda: self.open_settings_window("security"))
+        settings_menu.addAction(act_security_settings)
         
         # منوی راهنما
         help_menu = menubar.addMenu("❓ راهنما")
@@ -865,92 +1378,8 @@ class MainWindow(QMainWindow):
         now = jdatetime.datetime.now()
         self.date_label.setText(f"📅 {now.strftime('%Y/%m/%d - %A')}")
         self.time_label.setText(f"🕒 {now.strftime('%H:%M:%S')}")
-    
-    def create_central_widget(self):
-        """ایجاد ویجت مرکزی با تم تاریک"""
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
-        
-        # داشبورد اصلی
-        dashboard_frame = QFrame()
-        dashboard_frame.setStyleSheet("""
-            QFrame {
-                background-color: #1e1e1e;
-                border-radius: 10px;
-                border: 1px solid #333;
-            }
-        """)
-        
-        dashboard_layout = QVBoxLayout()
-        dashboard_layout.setContentsMargins(15, 15, 15, 15)
-        
-        # عنوان داشبورد
-        dashboard_title = QLabel("📊 داشبورد مدیریت")
-        dashboard_title.setStyleSheet("""
-            QLabel {
-                font-size: 20px;
-                font-weight: bold;
-                color: white;
-                padding-bottom: 10px;
-                border-bottom: 2px solid #3498db;
-            }
-        """)
-        dashboard_layout.addWidget(dashboard_title)
-        
-        # ویجت‌های آماری
-        stats_widget = self.create_stats_widget()
-        dashboard_layout.addWidget(stats_widget)
-        
-        # جدول پذیرش‌های اخیر
-        recent_receptions_label = QLabel("📋 آخرین پذیرش‌ها")
-        recent_receptions_label.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                font-weight: bold;
-                color: white;
-                margin-top: 15px;
-            }
-        """)
-        dashboard_layout.addWidget(recent_receptions_label)
-        
-        self.receptions_table = QTableWidget()
-        self.receptions_table.setColumnCount(7)
-        self.receptions_table.setHorizontalHeaderLabels([
-            "شماره پذیرش", "مشتری", "دستگاه", "تاریخ", "هزینه تخمینی", 
-            "اولویت", "وضعیت"
-        ])
-        self.receptions_table.horizontalHeader().setStretchLastSection(True)
-        dashboard_layout.addWidget(self.receptions_table)
-        
-        # جدول چک‌های در سررسید
-        due_checks_label = QLabel("💳 چک‌های در سررسید (۷ روز آینده)")
-        due_checks_label.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                font-weight: bold;
-                color: white;
-                margin-top: 15px;
-            }
-        """)
-        dashboard_layout.addWidget(due_checks_label)
-        
-        self.checks_table = QTableWidget()
-        self.checks_table.setColumnCount(6)
-        self.checks_table.setHorizontalHeaderLabels([
-            "شماره چک", "بانک", "مبلغ", "تاریخ سررسید", "صادرکننده", "وضعیت"
-        ])
-        self.checks_table.horizontalHeader().setStretchLastSection(True)
-        dashboard_layout.addWidget(self.checks_table)
-        
-        dashboard_frame.setLayout(dashboard_layout)
-        main_layout.addWidget(dashboard_frame)
-        
-        central_widget.setLayout(main_layout)
-    
+
+
     def create_stats_widget(self):
         """ایجاد ویجت آمارهای مهم"""
         stats_widget = QWidget()
@@ -1035,6 +1464,8 @@ class MainWindow(QMainWindow):
         side_widget.setStyleSheet("background-color: #1e1e1e;")
         side_layout = QVBoxLayout()
         
+        self.create_dashboard()
+
         # اطلاعات کاربر
         user_frame = QFrame()
         user_frame.setStyleSheet("""
@@ -1202,64 +1633,8 @@ class MainWindow(QMainWindow):
     
     def load_initial_data(self):
         """بارگذاری داده‌های اولیه"""
-        self.refresh_dashboard_data()
-    
-    def refresh_dashboard_data(self):
-        """به‌روزرسانی داده‌های داشبورد با اطلاعات واقعی"""
-        try:
-            # 🔴 **آمار پذیرش‌های امروز**
-            today = datetime.now().date()
-            today_str = today.strftime('%Y-%m-%d')
-            
-            # همه پذیرش‌ها را بگیر
-            all_receptions = self.data_manager.reception.get_all_receptions()
-            
-            # شمارش پذیرش‌های امروز
-            today_count = 0
-            for reception in all_receptions:
-                rec_date = reception.get('reception_date', '')
-                if rec_date and str(rec_date).startswith(today_str):
-                    today_count += 1
-            
-            # 🔴 **دستگاه‌های در حال تعمیر**
-            repairing_count = 0
-            for reception in all_receptions:
-                if reception.get('status') == 'در حال تعمیر':
-                    repairing_count += 1
-            
-            # 🔴 **قطعات با موجودی کم**
-            low_stock_parts = self.data_manager.part.get_low_stock_parts()
-            low_stock_count = len(low_stock_parts)
-            
-            # 🔴 **چک‌های در سررسید**
-            due_checks = self.data_manager.check_manager.get_checks_due_soon(days=7)
-            due_checks_count = len(due_checks) if due_checks else 0
-            
-            # 🔴 **به‌روزرسانی مستقیم ویجت‌های آماری**
-            # پیدا کردن و به‌روزرسانی جعبه‌های آمار
-            stats_frame = self.findChild(QFrame)  # اولین QFrame
-            if stats_frame:
-                # پیدا کردن تمام جعبه‌های آماری
-                stat_boxes = stats_frame.findChildren(QFrame)
-                if stat_boxes and len(stat_boxes) >= 4:
-                    # به‌روزرسانی مقادیر
-                    self.update_stat_box(stat_boxes[0], str(today_count))
-                    self.update_stat_box(stat_boxes[1], str(repairing_count))
-                    self.update_stat_box(stat_boxes[2], str(low_stock_count))
-                    self.update_stat_box(stat_boxes[3], str(due_checks_count))
-            
-            # 🔴 **آمار سیستم در پنل کناری**
-            self.update_system_status()
-            
-            # بارگذاری پذیرش‌های اخیر
-            recent_receptions = all_receptions[:10] if len(all_receptions) > 10 else all_receptions
-            self.load_recent_receptions(recent_receptions)
-            
-            # بارگذاری چک‌های در سررسید
-            self.load_due_checks(due_checks)
-            
-        except Exception as e:
-            print(f"خطا در به‌روزرسانی داشبورد: {e}")
+        self.load_dashboard_data()
+
 
     def update_stat_box(self, stat_box, value):
         """به‌روزرسانی مقدار جعبه آمار"""
@@ -2244,6 +2619,25 @@ class MainWindow(QMainWindow):
             "این قابلیت به زودی تکمیل خواهد شد.\n"
             "برای گزارش کامل از پنجره مستقل گزارش‌گیری استفاده کنید.")
 
+    def show_inventory_report(self):
+        """نمایش گزارش انبار"""
+        try:
+            from ui.forms.reports.forms.inventory_report_form import InventoryReportForm
+            
+            # ایجاد ویجت گزارش انبار
+            inventory_widget = QWidget()
+            layout = QVBoxLayout(inventory_widget)
+            
+            # افزودن گزارش انبار
+            inventory_form = InventoryReportForm(self.data_manager)
+            layout.addWidget(inventory_form)
+            
+            # نمایش در تب جدید
+            self.add_tab(inventory_widget, "📦 گزارش انبار")
+            
+        except Exception as e:
+            print(f"❌ خطا در نمایش گزارش انبار: {e}")
+            QMessageBox.warning(self, "خطا", f"خطا در بارگذاری گزارش انبار: {str(e)}")
 
 
 
@@ -2268,6 +2662,72 @@ class MainWindow(QMainWindow):
         """گزارش مالی"""
         QMessageBox.information(self, "گزارش مالی", "گزارش مالی باز خواهد شد.")
     
+
+    def open_settings_window(self, initial_tab="general"):
+        """باز کردن پنجره تنظیمات"""
+        try:
+            from ui.forms.settings.settings_window import SettingsWindow
+            
+            if not hasattr(self, 'settings_window') or self.settings_window is None:
+                self.settings_window = SettingsWindow(self.data_manager, self)
+            
+            self.settings_window.show()
+            self.settings_window.raise_()
+            self.settings_window.activateWindow()
+            
+            # انتخاب تب اولیه
+            if initial_tab == "users":
+                self.settings_window.select_tab(1)
+            elif initial_tab == "backup":
+                self.settings_window.select_tab(2)
+            elif initial_tab == "sms":
+                self.settings_window.select_tab(3)
+            elif initial_tab == "inventory":
+                self.settings_window.select_tab(4)
+            elif initial_tab == "security":
+                self.settings_window.select_tab(5)
+            
+        except ImportError as e:
+            QMessageBox.critical(self, "خطا", f"پنجره تنظیمات در دسترس نیست:\n{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"خطا در باز کردن پنجره تنظیمات:\n{str(e)}")
+
+    # در main_window.py
+    def setup_sms_module(self):
+        """راه‌اندازی ماژول پیامکی"""
+        try:
+            from modules.sms_manager import SMSManager
+            from services.sms_service import SMSService
+            
+            # ایجاد مدیر پیامک
+            api_key = self.get_setting('sms_api_key', '')  # از تنظیمات بخوان
+            self.sms_manager = SMSManager(self.data_manager, api_key=api_key)
+            
+            # ایجاد سرویس خودکار
+            self.sms_service = SMSService(self.sms_manager, self.data_manager)
+            
+            # شروع سرویس
+            if self.get_setting('auto_sms_enabled', False):
+                self.sms_service.start()
+                
+        except ImportError as e:
+            print(f"خطا در بارگذاری ماژول پیامکی: {e}")
+            self.sms_manager = None
+            self.sms_service = None
+
+    def open_sms_composer(self):
+        """باز کردن فرم ارسال پیامک"""
+        if not self.sms_manager:
+            QMessageBox.warning(self, "خطا", "ماژول پیامکی راه‌اندازی نشده است.")
+            return
+        
+        try:
+            from ui.forms.sms.sms_composer import SMSComposerForm
+            self.sms_composer = SMSComposerForm(self.sms_manager, self)
+            self.sms_composer.show()
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"خطا در باز کردن فرم پیامک: {str(e)}")
+
     def open_inventory_report(self):
         """گزارش انبار"""
         QMessageBox.information(self, "گزارش انبار", "گزارش انبار باز خواهد شد.")
@@ -2364,3 +2824,29 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             event.ignore()
+
+
+
+    def showEvent(self, event):
+        """رویداد نمایش پنجره"""
+        super().showEvent(event)
+        
+        # کمی تأخیر و سپس بررسی اسکرول
+        QTimer.singleShot(500, self.ensure_scroll_visible)
+
+    def ensure_scroll_visible(self):
+        """اطمینان از نمایش اسکرول"""
+        try:
+            # پیدا کردن ویجت اسکرول
+            scroll_area = self.findChild(QScrollArea)
+            if scroll_area:
+                # فعال کردن اسکرول
+                scroll_area.verticalScrollBar().setValue(10)
+                scroll_area.verticalScrollBar().setValue(0)
+                print("✅ اسکرول فعال شد")
+        except:
+            pass
+
+
+
+

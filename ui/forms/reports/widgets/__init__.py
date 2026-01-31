@@ -1,13 +1,8 @@
-﻿
-"""
-ویجت گزارش‌گیری 
+﻿# ui/forms/reports/widgets/__init__.py
 
-"""
-
-from jalali_date_input import JalaliCalendarDialog,JalaliDateInput
-
+from .jalali_date_input import JalaliDateInput, AdvancedJalaliCalendarDialog
 
 __all__ = [
-    'JalaliCalendarDialog',
-    'JalaliDateInput', 
+    'JalaliDateInput',
+    'AdvancedJalaliCalendarDialog'
 ]

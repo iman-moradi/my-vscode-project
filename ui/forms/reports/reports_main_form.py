@@ -33,6 +33,8 @@ except ImportError:
         def __init__(self, dm): pass
         def get_financial_summary(self, s, e): return {}
 
+from ui.forms.reports.forms.inventory_report_form import InventoryReportForm 
+
 # ui/forms/reports/utils/date_utils.py
 """
 توابع کمکی تاریخ شمسی برای ماژول گزارش‌گیری
@@ -191,7 +193,63 @@ class ReportsMainForm(QWidget):
         toolbar_layout.addWidget(btn_print, 1)
         
         parent_layout.addWidget(toolbar_frame)
+
+    def create_tabs(self):
+        """ایجاد تب‌های مختلف"""
+        self.tab_widget = QTabWidget()
+        
+        # گزارش روزانه
+        self.create_daily_tab()
+        
+        # گزارش هفتگی (موقتاً placeholder)
+        self.create_weekly_tab()
+        
+        # گزارش ماهانه (موقتاً placeholder)
+        self.create_monthly_tab()
+        
+        # گزارش مالی
+        self.create_financial_tab()
+        
+        # گزارش انبار - تغییر از placeholder به فرم واقعی
+        self.create_inventory_tab()
+        
+        # گزارش تعمیرات (موقتاً placeholder)
+        self.create_repair_tab()
+        
+        # گزارش فروش (موقتاً placeholder)
+        self.create_sales_tab()
+        
+        # گزارش مشتریان (موقتاً placeholder)
+        self.create_customer_tab()
+        
+        layout = QVBoxLayout()
+        layout.addWidget(self.tab_widget)
+        self.setLayout(layout)
     
+    def create_inventory_tab(self):
+        """ایجاد تب گزارش انبار"""
+        try:
+            # ایجاد فرم گزارش انبار
+            inventory_form = InventoryReportForm(self.data_manager)
+            
+            # اضافه کردن به تب
+            self.tab_widget.addTab(inventory_form, "📦 انبار")
+            
+            print("✅ تب گزارش انبار ایجاد شد")
+            
+        except Exception as e:
+            print(f"❌ خطا در ایجاد تب گزارش انبار: {e}")
+            # در صورت خطا، placeholder نمایش بده
+            placeholder = QWidget()
+            layout = QVBoxLayout(placeholder)
+            
+            error_label = QLabel(f"⚠️ خطا در بارگذاری گزارش انبار: {str(e)}")
+            error_label.setStyleSheet("color: #e74c3c; font-size: 14pt; padding: 20px;")
+            error_label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(error_label)
+            
+            self.tab_widget.addTab(placeholder, "📦 انبار")
+
     def create_tab_widget(self, parent_layout):
         """ایجاد ویجت تب‌ها"""
         self.tab_widget = QTabWidget()
@@ -221,17 +279,18 @@ class ReportsMainForm(QWidget):
             }
         """)
         
-        # ایجاد تب‌های مختلف
+        # ایجاد تب‌های مختلف - استفاده از فرم‌های واقعی
         self.create_daily_report_tab()
-        self.create_weekly_report_tab()
-        self.create_monthly_report_tab()
+        self.create_weekly_report_tab()  # تغییر: فرم واقعی
+        self.create_monthly_report_tab()  # تغییر: فرم واقعی
         self.create_financial_report_tab()
         self.create_inventory_report_tab()
         self.create_repair_report_tab()
         self.create_sales_report_tab()
         self.create_customer_report_tab()
         
-        parent_layout.addWidget(self.tab_widget, 1)  # stretch factor = 1
+        parent_layout.addWidget(self.tab_widget, 1)
+
 
     def create_daily_report_tab(self):
         """ایجاد تب گزارش روزانه"""
@@ -509,47 +568,61 @@ class ReportsMainForm(QWidget):
                 self.daily_table.setItem(row, col, item)
 
     def create_weekly_report_tab(self):
-        """ایجاد تب گزارش هفتگی"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        """ایجاد تب گزارش هفتگی - فرم واقعی"""
+        try:
+            from ui.forms.reports.forms.weekly_report_form import WeeklyReportForm
+            self.weekly_form = WeeklyReportForm(self.data_manager)
+            tab = self.weekly_form
+        except ImportError as e:
+            print(f"⚠️ خطا در بارگذاری فرم گزارش هفتگی: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            
+            error_label = QLabel(f"❌ خطا در بارگذاری گزارش هفتگی:\n{str(e)}")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #e74c3c;
+                    font-size: 12pt;
+                    padding: 50px;
+                    font-family: 'B Nazanin';
+                }
+            """)
+            layout.addWidget(error_label)
         
-        placeholder = QLabel("📆 گزارش هفتگی - به زودی...")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-size: 24pt;
-                font-weight: bold;
-                padding: 50px;
-                background-color: #111;
-                border-radius: 10px;
-            }
-        """)
-        
-        layout.addWidget(placeholder)
         self.tab_widget.addTab(tab, "📆 هفتگی")
-    
+
     def create_monthly_report_tab(self):
-        """ایجاد تب گزارش ماهانه"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        """ایجاد تب گزارش ماهانه - فرم واقعی"""
+        try:
+            from ui.forms.reports.forms.monthly_report_form import MonthlyReportForm
+            self.monthly_form = MonthlyReportForm(self.data_manager)
+            tab = self.monthly_form
+        except ImportError as e:
+            print(f"⚠️ خطا در بارگذاری فرم گزارش ماهانه: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            
+            error_label = QLabel(f"❌ خطا در بارگذاری گزارش ماهانه:\n{str(e)}")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #e74c3c;
+                    font-size: 12pt;
+                    padding: 50px;
+                    font-family: 'B Nazanin';
+                }
+            """)
+            layout.addWidget(error_label)
         
-        placeholder = QLabel("📅 گزارش ماهانه - به زودی...")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-size: 24pt;
-                font-weight: bold;
-                padding: 50px;
-                background-color: #111;
-                border-radius: 10px;
-            }
-        """)
-        
-        layout.addWidget(placeholder)
         self.tab_widget.addTab(tab, "📅 ماهانه")
-    
+ 
 # در reports_main_form.py، تابع create_financial_report_tab را اصلاح کنید:
 
     def create_financial_report_tab(self):
@@ -578,88 +651,112 @@ class ReportsMainForm(QWidget):
 
     def create_inventory_report_tab(self):
         """ایجاد تب گزارش انبار"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        placeholder = QLabel("📦 گزارش انبار - به زودی...")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-size: 24pt;
-                font-weight: bold;
-                padding: 50px;
-                background-color: #111;
-                border-radius: 10px;
-            }
-        """)
-        
-        layout.addWidget(placeholder)
+        try:
+            from ui.forms.reports.forms.inventory_report_form import InventoryReportForm
+            self.inventoryform = InventoryReportForm(self.data_manager)
+            tab = self.inventoryform
+        except ImportError as e:
+            print(f"⚠️ خطا در بارگذاری فرم گزارش انبار: {e}")
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            
+            error_label = QLabel(f"❌ خطا در بارگذاری گزارش انبار:\n{str(e)}")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #e74c3c;
+                    font-size: 12pt;
+                    padding: 50px;
+                }
+            """)
+            layout.addWidget(error_label)
         self.tab_widget.addTab(tab, "📦 انبار")
     
     def create_repair_report_tab(self):
         """ایجاد تب گزارش تعمیرات"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        try:
+            from ui.forms.reports.forms.repair_report_form import RepairReportForm
+            self.repair_form = RepairReportForm(self.data_manager)
+            
+            # تنظیم اندازه مناسب
+            self.repair_form.setMinimumSize(800, 600)
+            
+            tab = self.repair_form
+        except ImportError as e:
+            print(f"⚠️ خطا در بارگذاری فرم گزارش تعمیرات: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            
+            error_label = QLabel(f"❌ خطا در بارگذاری گزارش تعمیرات:\n{str(e)}")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #e74c3c;
+                    font-size: 12pt;
+                    padding: 50px;
+                    font-family: 'B Nazanin';
+                }
+            """)
+            layout.addWidget(error_label)
         
-        placeholder = QLabel("🔧 گزارش تعمیرات - به زودی...")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-size: 24pt;
-                font-weight: bold;
-                padding: 50px;
-                background-color: #111;
-                border-radius: 10px;
-            }
-        """)
-        
-        layout.addWidget(placeholder)
         self.tab_widget.addTab(tab, "🔧 تعمیرات")
-    
+
     def create_sales_report_tab(self):
         """ایجاد تب گزارش فروش"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        placeholder = QLabel("🛒 گزارش فروش - به زودی...")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-size: 24pt;
-                font-weight: bold;
-                padding: 50px;
-                background-color: #111;
-                border-radius: 10px;
-            }
-        """)
-        
-        layout.addWidget(placeholder)
+        try:
+            from ui.forms.reports.forms.sales_report_form import SalesReportForm
+            self.ssalesform = SalesReportForm(self.data_manager)
+            tab = self.ssalesform
+        except ImportError as e:
+            print(f"⚠️ خطا در بارگذاری فرم گزارش فروش: {e}")
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            
+            error_label = QLabel(f"❌ خطا در بارگذاری گزارش فروش:\n{str(e)}")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #e74c3c;
+                    font-size: 12pt;
+                    padding: 50px;
+                }
+            """)
+            layout.addWidget(error_label)
         self.tab_widget.addTab(tab, "🛒 فروش")
     
     def create_customer_report_tab(self):
         """ایجاد تب گزارش مشتریان"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        try:
+            from ui.forms.reports.forms.customer_report_form import CustomerReportForm
+            self.customer_form = CustomerReportForm(self.data_manager)
+            tab = self.customer_form
+        except ImportError as e:
+            print(f"⚠️ خطا در بارگذاری فرم گزارش مشتریان: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            tab = QWidget()
+            layout = QVBoxLayout(tab)
+            
+            error_label = QLabel(f"❌ خطا در بارگذاری گزارش مشتریان:\n{str(e)}")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #e74c3c;
+                    font-size: 12pt;
+                    padding: 50px;
+                    font-family: 'B Nazanin';
+                }
+            """)
+            layout.addWidget(error_label)
         
-        placeholder = QLabel("👥 گزارش مشتریان - به زودی...")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet("""
-            QLabel {
-                color: #7f8c8d;
-                font-size: 24pt;
-                font-weight: bold;
-                padding: 50px;
-                background-color: #111;
-                border-radius: 10px;
-            }
-        """)
-        
-        layout.addWidget(placeholder)
         self.tab_widget.addTab(tab, "👥 مشتریان")
-    
+
+
+
     def create_status_bar(self, parent_layout):
         """ایجاد نوار وضعیت پایین فرم"""
         status_frame = QFrame()

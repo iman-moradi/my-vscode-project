@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QLineEdit, QDateEdit, QGroupBox,
     QFormLayout, QSpinBox, QCheckBox, QTextEdit,
-    QProgressBar, QTabWidget, QSplitter, QSizePolicy
+    QProgressBar, QTabWidget, QSplitter, QSizePolicy, QMessageBox
 )
 from PySide6.QtCore import Qt, Signal, QDate, QTimer, QPointF
 from PySide6.QtGui import QFont, QColor, QAction, QPainter
@@ -272,7 +272,105 @@ class FinancialReportForm(QWidget):
         self.create_profit_tab()
         
         parent_layout.addWidget(self.tab_widget, 1)  # stretch factor = 1
-    
+
+    # در financial_report_form.py، در تابع create_toolbar اضافه کنید:
+
+    def create_toolbar(self, parent_layout):
+        """ایجاد نوار ابزار گزارش مالی"""
+        toolbar_frame = QFrame()
+        toolbar_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        toolbar_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1a1a2e;
+                border-radius: 6px;
+                padding: 8px;
+            }
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 4px;
+                font-weight: bold;
+                font-family: 'B Nazanin';
+                font-size: 10pt;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QLabel {
+                color: #ffffff;
+                font-weight: bold;
+                font-family: 'B Nazanin';
+            }
+        """)
+        
+        toolbar_layout = QHBoxLayout(toolbar_frame)
+        
+        # دکمه‌ها
+        btn_refresh = QPushButton("🔄 بروزرسانی")
+        btn_refresh.clicked.connect(self.load_financial_data)
+        
+        btn_export_excel = QPushButton("📊 خروجی Excel")
+        btn_export_excel.clicked.connect(self.export_to_excel)
+        
+        btn_export_pdf = QPushButton("📄 خروجی PDF")
+        btn_export_pdf.clicked.connect(self.export_to_pdf)
+        
+        btn_print = QPushButton("🖨️ چاپ")
+        btn_print.clicked.connect(self.print_report)
+        
+        toolbar_layout.addWidget(btn_refresh)
+        toolbar_layout.addWidget(btn_export_excel)
+        toolbar_layout.addWidget(btn_export_pdf)
+        toolbar_layout.addWidget(btn_print)
+        
+        toolbar_layout.addStretch()
+        parent_layout.addWidget(toolbar_frame)
+
+    def export_to_excel(self):
+        """صدور گزارش مالی به Excel"""
+        try:
+            from ui.forms.reports.utils.exporters import ExcelExporter
+            
+            exporter = ExcelExporter(self.data_manager)
+            
+            # دریافت تاریخ‌های انتخاب شده
+            start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
+            end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
+            
+            # دریافت داده‌های مالی
+            financial_data = self.get_financial_data_for_export()
+            
+            # صدور خروجی
+            success, message = exporter.export_financial_report(
+                financial_data, start_date, end_date
+            )
+            
+            if success:
+                QMessageBox.information(self, "✅ موفق", message)
+            else:
+                QMessageBox.warning(self, "⚠️ خطا", message)
+                
+        except ImportError as e:
+            QMessageBox.critical(self, "❌ خطا", 
+                "ماژول‌های لازم برای خروجی Excel نصب نیستند.\n"
+                "لطفا pandas و openpyxl را نصب کنید:\n"
+                "pip install pandas openpyxl")
+        except Exception as e:
+            QMessageBox.critical(self, "❌ خطا", f"خطا در صدور خروجی:\n{str(e)}")
+
+    def get_financial_data_for_export(self):
+        """تهیه داده‌های مالی برای خروجی"""
+        return {
+            'summary': self.financial_data.get('summary', {}),
+            'income_by_category': self.financial_data.get('income_by_category', {}),
+            'expense_by_category': self.financial_data.get('expense_by_category', {}),
+            'transactions': self.financial_data.get('transactions', []),
+            'accounts': self.financial_data.get('accounts', []),
+            'invoices': self.financial_data.get('invoices', [])
+    }    
+
     def create_summary_tab(self):
         """ایجاد تب خلاصه مالی"""
         tab = QWidget()
