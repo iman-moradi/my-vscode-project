@@ -17,7 +17,7 @@ from datetime import datetime
 
 # ایمپورت ویجت تاریخ شمسی
 try:
-    from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting
+    from utils.jalali_date_widget import JalaliDateInput
     JALALI_DATE_AVAILABLE = True
 except ImportError:
     print("⚠️ ویجت تاریخ شمسی یافت نشد")
@@ -249,7 +249,7 @@ class PartnersForm(QWidget):
         
         # تاریخ امروز
         try:
-            from utils.date_utils import get_current_jalali
+            from utils.jalali_date_widget import get_current_jalali
             today_date = get_current_jalali()
         except:
             import jdatetime
@@ -481,7 +481,7 @@ class PartnersForm(QWidget):
         settings_layout.addWidget(QLabel("از تاریخ:"), 0, 0)
         
         if JALALI_DATE_AVAILABLE:
-            self.profit_start_date = JalaliDateInputAccounting()
+            self.profit_start_date = JalaliDateInput()
         else:
             self.profit_start_date = QLineEdit()
             self.profit_start_date.setPlaceholderText("1404/10/01")
@@ -491,7 +491,7 @@ class PartnersForm(QWidget):
         settings_layout.addWidget(QLabel("تا تاریخ:"), 0, 2)
         
         if JALALI_DATE_AVAILABLE:
-            self.profit_end_date = JalaliDateInputAccounting()
+            self.profit_end_date = JalaliDateInput()
         else:
             self.profit_end_date = QLineEdit()
             self.profit_end_date.setPlaceholderText("1404/10/30")
@@ -591,8 +591,8 @@ class PartnersForm(QWidget):
         filter_layout.addWidget(self.report_period)
         
         if JALALI_DATE_AVAILABLE:
-            self.report_start_date = JalaliDateInputAccounting()
-            self.report_end_date = JalaliDateInputAccounting()
+            self.report_start_date = JalaliDateInput()
+            self.report_end_date = JalaliDateInput()
         else:
             self.report_start_date = QLineEdit()
             self.report_end_date = QLineEdit()

@@ -13,7 +13,7 @@ import jdatetime
 
 # ایمپورت ویجت تاریخ شمسی
 try:
-    from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting
+    from utils.jalali_date_widget import JalaliDateInput
 except ImportError:
     print("⚠️ ویجت تاریخ شمسی یافت نشد")
 
@@ -134,10 +134,10 @@ class PartnerDialog(QDialog):
         self.load_persons()
         basic_layout.addRow("👤 شخص:", self.person_combo)
         
-        self.start_date_input = JalaliDateInputAccounting()
+        self.start_date_input = JalaliDateInput()
         basic_layout.addRow("📅 تاریخ شروع:", self.start_date_input)
         
-        self.end_date_input = JalaliDateInputAccounting()
+        self.end_date_input = JalaliDateInput()
         basic_layout.addRow("📅 تاریخ پایان (اختیاری):", self.end_date_input)
         
         basic_group.setLayout(basic_layout)

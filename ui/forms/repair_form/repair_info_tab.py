@@ -3,7 +3,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 import jdatetime
-from ui.widgets.jalali_date_input import JalaliDateInput
+from utils.jalali_date_widget import JalaliDateInput
 
 # ui/forms/repair_form/repair_info_tab.py
 class RepairInfoTab(QWidget):

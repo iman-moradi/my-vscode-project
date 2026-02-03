@@ -15,7 +15,7 @@ from datetime import datetime
 
 # ایمپورت ویجت تاریخ شمسی
 try:
-    from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting
+    from utils.jalali_date_widget import JalaliDateInput
 except ImportError:
     print("⚠️ ویجت تاریخ شمسی یافت نشد")
 
@@ -298,11 +298,11 @@ class PartnerProfitsDialog(QDialog):
         layout.setSpacing(10)
         
         layout.addWidget(QLabel("📅 از تاریخ:"))
-        self.start_date_filter = JalaliDateInputAccounting()
+        self.start_date_filter = JalaliDateInput()
         layout.addWidget(self.start_date_filter)
         
         layout.addWidget(QLabel("📅 تا تاریخ:"))
-        self.end_date_filter = JalaliDateInputAccounting()
+        self.end_date_filter = JalaliDateInput()
         layout.addWidget(self.end_date_filter)
         
         self.type_filter = QComboBox()

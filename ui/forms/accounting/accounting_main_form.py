@@ -270,7 +270,7 @@ class AccountingMainForm(QWidget):
         
         # تاریخ شمسی امروز
         try:
-            from utils.date_utils import get_current_jalali
+            from utils.jalali_date_widget import get_current_jalali
             today_date = get_current_jalali()
         except:
             import jdatetime

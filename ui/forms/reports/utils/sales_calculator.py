@@ -4,7 +4,7 @@
 """
 
 from PySide6.QtCore import QDate
-from utils.date_utils import jalali_to_gregorian, gregorian_to_jalali
+from utils.jalali_date_widget import jalali_to_gregorian, gregorian_to_jalali
 
 
 class SalesCalculator:

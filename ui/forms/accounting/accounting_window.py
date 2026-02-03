@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QAction, QIcon, QFont
 import jdatetime
 from datetime import datetime
-from utils.date_utils import get_current_jalali
+from utils.jalali_date_widget import get_current_jalali
 
 # ایمپورت فرم اصلی حسابداری
 from .accounting_main_form import AccountingMainForm
@@ -20,7 +20,7 @@ from .accounting_main_form import AccountingMainForm
 class AccountingWindow(QMainWindow):
     """پنجره مستقل سیستم حسابداری"""
     
-    def __init__(self, data_manager, parent=None):
+    def __init__(self, data_manager, parent=None, config_manager=None, permission_manager=None):
         super().__init__(parent)
         self.data_manager = data_manager
         self.parent_window = parent
@@ -46,9 +46,48 @@ class AccountingWindow(QMainWindow):
         
         # بارگذاری داده‌های اولیه
         self.load_initial_data()
+
+        self.config_manager = config_manager
+        self.permission_manager = permission_manager
+        
+        # بارگذاری تنظیمات مالی
+        self.load_financial_config()
+        
+        # اعمال محدودیت‌ها
+        self.setup_financial_restrictions()
+
         
         print("✅ پنجره حسابداری ایجاد شد")
+
+
+    def load_financial_config(self):
+        """بارگذاری تنظیمات مالی"""
+        if self.config_manager:
+            self.financial_config = self.config_manager.get('financial', {})
+            
+            self.tax_rate = self.financial_config.get('tax_rate', 9.0)
+            self.currency = self.financial_config.get('currency', 'تومان')
+            self.max_credit = self.financial_config.get('max_credit_amount', 10000000)
     
+    def setup_financial_restrictions(self):
+        """تنظیم محدودیت‌های مالی"""
+        if not self.permission_manager:
+            return
+        
+        # غیرفعال کردن بخش‌ها بر اساس دسترسی
+        if not self.permission_manager.has_permission('edit_accounts'):
+            # غیرفعال کردن مدیریت حساب‌ها
+            pass
+        
+        if not self.permission_manager.has_permission('edit_checks'):
+            # غیرفعال کردن مدیریت چک‌ها
+            pass
+    
+    def calculate_with_tax(self, amount):
+        """محاسبه با مالیات بر اساس تنظیمات"""
+        tax_amount = amount * (self.tax_rate / 100)
+        return amount + tax_amount
+
     def get_dark_style(self):
         """استایل تم تاریک برای حسابداری"""
         return """
@@ -597,7 +636,7 @@ class AccountingWindow(QMainWindow):
         """به‌روزرسانی نوار وضعیت"""
         # تاریخ و زمان شمسی
         try:
-            from utils.date_utils import get_current_jalali, get_persian_weekday
+            from utils.jalali_date_widget import get_current_jalali, get_persian_weekday
             now = jdatetime.datetime.now()
             jalali_date = now.strftime('%Y/%m/%d')
             weekday = get_persian_weekday(now)

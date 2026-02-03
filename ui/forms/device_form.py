@@ -23,7 +23,7 @@ project_root = os.path.dirname(os.path.dirname(current_dir))
 sys.path.insert(0, project_root)
 
 # ایمپورت ویجت تاریخ شمسی
-from ui.widgets.jalali_date_input import JalaliDateInput
+from utils.jalali_date_widget import JalaliDateInput
 
 
 class DeviceForm(QWidget):

@@ -11,7 +11,7 @@ import jdatetime
 # در فایل 2 (check_dialog.py)، importها را اینگونه اصلاح کنید:
 
 try:
-    from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting as JalaliDateInput
+    from utils.jalali_date_widget import JalaliDateInput
 except ImportError:
     from PySide6.QtWidgets import QLineEdit
     from PySide6.QtCore import Signal

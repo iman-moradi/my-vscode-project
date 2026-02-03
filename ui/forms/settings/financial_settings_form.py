@@ -9,9 +9,10 @@ from PySide6.QtCore import Qt
 class FinancialSettingsForm(QWidget):
     """فرم تنظیمات مالی"""
     
-    def __init__(self, data_manager):
+    def __init__(self, data_manager, config_manager=None):
         super().__init__()
         self.data_manager = data_manager
+        self.config_manager = config_manager
         self.init_ui()
         self.apply_styles()
     

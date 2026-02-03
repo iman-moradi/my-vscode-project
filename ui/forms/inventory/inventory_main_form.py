@@ -19,7 +19,7 @@ from typing import Optional, Dict, Any
 class InventoryMainForm(BaseInventoryForm):
     """فرم اصلی انبار با 4 تب و خلاصه کشویی"""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, config_manager=None, permission_manager=None):
         # حل مشکل parent
         if parent is not None and not isinstance(parent, QWidget):
             super().__init__("مدیریت انبارها", None)
@@ -61,8 +61,56 @@ class InventoryMainForm(BaseInventoryForm):
         # بارگذاری داده‌ها
         self.load_summary_data()
         
+        self.config_manager = config_manager
+        self.permission_manager = permission_manager
+        
+        # بارگذاری تنظیمات انبار
+        self.load_inventory_config()
+        
+        # اعمال محدودیت‌ها
+        self.setup_inventory_restrictions()
+
+
         print("✅ فرم اصلی انبار با موفقیت ایجاد شد")
+
+    def load_inventory_config(self):
+        """بارگذاری تنظیمات انبار"""
+        if self.config_manager:
+            self.inventory_config = self.config_manager.get('inventory', {})
+            
+            # تنظیم مقادیر پیش‌فرض
+            self.default_min_stock = self.inventory_config.get('min_stock_default', 5)
+            self.default_max_stock = self.inventory_config.get('max_stock_default', 100)
+            self.low_stock_warning = self.inventory_config.get('low_stock_warning', 10)
     
+    def setup_inventory_restrictions(self):
+        """تنظیم محدودیت‌های انبار"""
+        if not self.permission_manager:
+            return
+        
+        # بررسی دسترسی به انواع انبار
+        warehouses = {
+            'قطعات نو': 'edit_new_parts',
+            'قطعات دست دوم': 'edit_used_parts',
+            'لوازم نو': 'edit_new_appliances',
+            'لوازم دست دوم': 'edit_used_appliances'
+        }
+        
+        for warehouse_name, permission in warehouses.items():
+            if not self.permission_manager.has_permission(permission):
+                # غیرفعال کردن تب یا دکمه مربوطه
+                pass
+    
+    def validate_stock_quantity(self, quantity, warehouse_type):
+        """اعتبارسنجی تعداد بر اساس تنظیمات"""
+        if quantity < 0:
+            return False, "تعداد نمی‌تواند منفی باشد"
+        
+        if quantity > self.default_max_stock:
+            return False, f"تعداد نمی‌تواند بیشتر از {self.default_max_stock} باشد"
+        
+        return True, ""
+
     def create_navigation_bar(self):
         """ایجاد نوار ناوبری برای بازگشت به داشبورد"""
         nav_frame = QFrame()

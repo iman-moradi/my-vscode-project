@@ -17,10 +17,10 @@ from datetime import datetime, timedelta
 # در بالای فایل 1، importها را اینگونه اصلاح کنید:
 
 try:
-    from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting as JalaliDateInput
+    from utils.jalali_date_widget import JalaliDateInput as JalaliDateInput
 except ImportError:
     try:
-        from ui.widgets.jalali_date_widget import JalaliDateWidget as JalaliDateInput
+        from utils.jalali_date_widget import JalaliDateWidget as JalaliDateInput
     except ImportError:
         # فالب‌ک آپ
         from PySide6.QtWidgets import QLineEdit
@@ -1106,7 +1106,7 @@ class ChecksForm(QWidget):
         
         # فیلدهای ساده
         from PySide6.QtWidgets import QLineEdit, QComboBox
-        from ui.widgets.jalali_date_input import JalaliDateInput
+        from utils.jalali_date_widget import JalaliDateInput
         
         fields = {}
         

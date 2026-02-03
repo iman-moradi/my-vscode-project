@@ -96,66 +96,132 @@ except ImportError as e:
     ACCOUNTING_WINDOW_AVAILABLE = False
     AccountingWindow = None
 
-    
+try:
+    from utils.jalali_date_widget import JalaliDateWidget, JalaliDateEdit, JalaliDateTimeWidget
+    JALALI_WIDGET_AVAILABLE = True
+    print("✅ ویجت تاریخ شمسی بارگذاری شد")
+except ImportError as e:
+    print(f"⚠️ خطا در بارگذاری ویجت تاریخ شمسی: {e}")
+    JALALI_WIDGET_AVAILABLE = False
 
-def convert_to_jalali_display(date_str):
+def convert_to_jalali_display(self, date_str):
     """تبدیل رشته تاریخ میلادی به شمسی برای نمایش"""
     if not date_str:
         return ""
     
     try:
-        # فرمت‌های مختلف تاریخ
-        date_formats = ['%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%d/%m/%Y']
+        # اگر تاریخ در حال حاضر شمسی است، برگردان
+        if '/' in str(date_str) and len(str(date_str).split('/')[0]) == 4:
+            parts = str(date_str).split('/')
+            if len(parts) >= 3:
+                year = int(parts[0])
+                # بررسی اینکه آیا سال شمسی است (مثلاً 1400)
+                if 1300 <= year <= 1500:
+                    return str(date_str)
         
-        miladi_date = None
-        for fmt in date_formats:
+        # فرض می‌کنیم تاریخ میلادی است
+        # حذف زمان اگر وجود دارد
+        date_only = str(date_str).split(' ')[0]
+        
+        # فرمت‌های مختلف
+        for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%d/%m/%Y']:
             try:
-                miladi_date = datetime.strptime(date_str, fmt).date()
-                break
+                miladi_date = datetime.strptime(date_only, fmt).date()
+                jalali_date = jdatetime.date.fromgregorian(date=miladi_date)
+                return jalali_date.strftime('%Y/%m/%d')
             except:
                 continue
         
-        if miladi_date:
-            jalali_date = jdatetime.date.fromgregorian(date=miladi_date)
-            return jalali_date.strftime('%Y/%m/%d')
-        else:
-            return date_str  # اگر تبدیل نشد، تاریخ اصلی را برگردان
+        # اگر هیچکدام کار نکرد، تاریخ اصلی را برگردان
+        return str(date_str)
             
     except Exception as e:
         print(f"⚠️ خطا در تبدیل تاریخ {date_str}: {e}")
-        return date_str
+        return str(date_str)
 
-
-
-
-
-class MainWindow(QMainWindow):
-    """پنجره اصلی برنامه"""
-
-# در فایل ui/main_window.py، کلاس MainWindow را بررسی و اصلاح کنید:
 
 class MainWindow(QMainWindow):
     """پنجره اصلی برنامه"""
     
-    def __init__(self, user_data, data_manager):
+    def __init__(self, user_data, data_manager, username="admin"):
         super().__init__()
         self.user_data = user_data
         self.data_manager = data_manager
         self.inventory_window = None
         self.accounting_windows = {}
         
-        # 🔴 اضافه کردن DashboardManager
+        # 🔴 1. ابتدا ConfigManager
+        from modules.config_manager import ConfigManager
+        self.config_manager = ConfigManager(self.data_manager)
+        print(f"✅ ConfigManager ایجاد شد. نوع: {type(self.config_manager)}")
+        print(f"   id: {id(self.config_manager)}")
+        print("🔍 بررسی اولیه تنظیمات...")
+        self.check_settings_in_database()
+
+
+        # 🔴 تست متدهای config_manager
+        if hasattr(self.config_manager, 'get'):
+            test_value = self.config_manager.get('general', 'app_name', 'پیش‌فرض')
+            print(f"   تست متد get: {test_value}")
+        
+        self.test_config_manager()
+        self.debug_config_manager()
+
+        self.config_manager.display_settings_changed.connect(self.on_display_settings_changed)
+
+        # 🔴 2. سپس DashboardManager (قبل از init_ui)
         try:
             from modules.dashboard_manager import DashboardManager
             self.dashboard_manager = DashboardManager(data_manager)
+            print(f"✅ DashboardManager ایجاد شد")
         except ImportError as e:
             print(f"⚠️ خطا در بارگذاری DashboardManager: {e}")
             self.dashboard_manager = None
+
+
+
+        print(f"✅ DashboardManager ایجاد شد: {hasattr(self, 'dashboard_manager')}")
+
+        # بررسی متدهای داشبورد
+        dashboard_methods = [
+            'refresh_dashboard_data',
+            'refresh_old_dashboard_data', 
+            'load_dashboard_data'  # اگر وجود دارد
+        ]
+
+        for method in dashboard_methods:
+            exists = hasattr(self, method)
+            print(f"   متد {method}: {'✅' if exists else '❌'}")
+                
+
+
+        # 🔴 3. سپس PermissionManager
+        from modules.permission_manager import PermissionManager
+        self.permission_manager = PermissionManager(self.config_manager)
+        print(f"✅ PermissionManager ایجاد شد")
         
+        # 🔴 4. اکنون init_ui را فراخوانی کن
         self.init_ui()
         self.setup_connections()
+        
+        # 🔴 5. ترمیم config_manager
+        self.repair_config_manager()
+        
+        # 🔴 6. تنظیم کاربر جاری
+        self.setup_current_user(username)
+        
+        # 🔴 7. اعمال تنظیمات اولیه
+        self.apply_initial_settings()
+        
+
+
+        # 🔴 8. اتصال سیگنال‌ها
+        self.setup_config_signals()
+        
+        # 🔴 9. بارگذاری اولیه داده‌ها
         self.load_initial_data()
-    
+
+
     def init_ui(self):
         """راه‌اندازی رابط کاربری"""
         self.setWindowTitle("سیستم مدیریت تعمیرگاه لوازم خانگی شیروین")
@@ -261,8 +327,14 @@ class MainWindow(QMainWindow):
         """)
         content_layout.addWidget(dashboard_title)
         
+        # اضافه کردن ویجت انتخاب تاریخ
+        date_selector = self.create_date_selector_widget()
+        if date_selector:
+            content_layout.addWidget(date_selector)
+
+
         # ویجت کارت‌های آماری (اگر موجود است)
-        if self.dashboard_manager:
+        if hasattr(self, 'dashboard_manager') and self.dashboard_manager:
             try:
                 from ui.widgets.dashboard.stats_cards_widget import StatsCardsWidget
                 self.stats_widget = StatsCardsWidget()
@@ -274,6 +346,7 @@ class MainWindow(QMainWindow):
                 stats_widget = self.create_stats_widget()
                 content_layout.addWidget(stats_widget)
         else:
+            print("⚠️ dashboard_manager موجود نیست، نمایش داشبورد ساده")
             # نمایش کارت‌های آماری ساده
             stats_widget = self.create_stats_widget()
             content_layout.addWidget(stats_widget)
@@ -341,7 +414,94 @@ class MainWindow(QMainWindow):
         content_widget.setMinimumHeight(1800)  # ارتفاع زیاد برای فعال کردن اسکرول
         
         # بارگذاری اولیه داده‌ها
-        self.load_dashboard_data()
+        self.refresh_dashboard_data()
+
+
+#هر سه تا برای تست 
+    def create_test_menu(self):
+        """منوی تست برای توسعه‌دهندگان"""
+        if hasattr(self, 'menuBar'):
+            test_menu = self.menuBar().addMenu("🔧 تست")
+            
+            # تست تنظیمات
+            test_action = QAction("بررسی تنظیمات دیتابیس", self)
+            test_action.triggered.connect(self.debug_check_settings)
+            test_menu.addAction(test_action)
+            
+            # بازخوانی تنظیمات
+            reload_action = QAction("بازخوانی تنظیمات از دیتابیس", self)
+            reload_action.triggered.connect(self.reload_all_settings)
+            test_menu.addAction(reload_action)
+
+    def debug_check_settings(self):
+        """بررسی تنظیمات ذخیره شده"""
+        self.check_settings_in_database()
+        
+        # همچنین تنظیمات فعلی در حافظه را بررسی کن
+        print("\n🔍 بررسی ConfigManager فعلی:")
+        if hasattr(self, 'config_manager'):
+            print(f"   آدرس ConfigManager: {id(self.config_manager)}")
+            print(f"   نوع: {type(self.config_manager)}")
+            
+            # بررسی همه دسته‌ها
+            categories = ['general', 'security', 'financial', 'inventory', 'display']
+            for category in categories:
+                settings = self.config_manager.get(category)
+                if settings:
+                    print(f"   📁 دسته '{category}':")
+                    for key, value in settings.items():
+                        print(f"     {key}: {value}")
+                else:
+                    print(f"   ⚠️ دسته '{category}': خالی")
+
+    def reload_all_settings(self):
+        """بازخوانی تمام تنظیمات از دیتابیس"""
+        try:
+            print("🔄 بازخوانی تمام تنظیمات از دیتابیس...")
+            
+            # بارگذاری مجدد از دیتابیس
+            self.config_manager.load_all_configs()
+            
+            # اعمال مجدد تنظیمات
+            self.apply_initial_settings()
+            
+            QMessageBox.information(self, "بازخوانی", "تنظیمات با موفقیت بازخوانی شدند.")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "خطا", f"خطا در بازخوانی تنظیمات: {e}")
+
+
+
+
+    def open_settings(self):
+        """باز کردن فرم تنظیمات"""
+        try:
+            from ui.forms.settings.settings_main_form import SettingsMainForm
+            
+            # ایجاد فرم تنظیمات
+            settings_form = SettingsMainForm(
+                data_manager=self.data_manager,
+                config_manager=self.config_manager
+            )
+            
+            # ایجاد یک پنجره مودال برای تنظیمات
+            from PySide6.QtWidgets import QDialog, QVBoxLayout
+            
+            dialog = QDialog(self)
+            dialog.setWindowTitle("⚙️ تنظیمات سیستم")
+            dialog.setModal(True)
+            dialog.setMinimumSize(900, 700)
+            
+            layout = QVBoxLayout()
+            layout.addWidget(settings_form)
+            dialog.setLayout(layout)
+            
+            # نمایش دیالوگ
+            dialog.exec()
+            
+        except Exception as e:
+            print(f"⚠️ خطا در باز کردن تنظیمات: {e}")
+            QMessageBox.warning(self, "خطا", "خطا در بارگذاری فرم تنظیمات")
 
     def show_simple_charts(self, layout):
         """نمایش نمودارهای ساده (برای وقتی که ویجت‌های جدید موجود نیستند)"""
@@ -517,20 +677,14 @@ class MainWindow(QMainWindow):
         lists_layout.addStretch()
         lists_frame.setLayout(lists_layout)
         layout.addWidget(lists_frame)
-    
-    def load_dashboard_data(self):
-        """بارگذاری داده‌های داشبورد"""
-        # اگر DashboardManager موجود است، از آن استفاده کن
-        if self.dashboard_manager:
-            QTimer.singleShot(100, self.refresh_dashboard_data)
-        else:
-            # در غیر این صورت، از روش قدیمی استفاده کن
-            self.refresh_old_dashboard_data()
-    
+
     def refresh_dashboard_data(self):
         """بروزرسانی داده‌های داشبورد جدید"""
         try:
-            if not self.dashboard_manager:
+            # 🔴 بررسی وجود dashboard_manager
+            if not hasattr(self, 'dashboard_manager') or not self.dashboard_manager:
+                print("⚠️ dashboard_manager موجود نیست، استفاده از روش قدیمی")
+                self.refresh_old_dashboard_data()
                 return
             
             print("🔄 بروزرسانی داشبورد...")
@@ -538,30 +692,79 @@ class MainWindow(QMainWindow):
             # دریافت داده‌های داشبورد
             dashboard_data = self.dashboard_manager.get_dashboard_data()
             
-            # بروزرسانی کارت‌های آماری
-            if hasattr(self, 'stats_widget') and 'stats' in dashboard_data:
-                self.stats_widget.update_stats(dashboard_data['stats'])
+            # 🔴 بررسی معتبر بودن داده‌ها
+            if not dashboard_data:
+                print("⚠️ داده‌های داشبورد خالی است")
+                return
+                
+            # 🔴 بررسی وجود keyهای مورد نیاز
+            if 'stats' not in dashboard_data:
+                dashboard_data['stats'] = {}
+            if 'charts' not in dashboard_data:
+                dashboard_data['charts'] = {}
+            if 'alerts' not in dashboard_data:
+                dashboard_data['alerts'] = []
+            if 'quick_lists' not in dashboard_data:
+                dashboard_data['quick_lists'] = {}
             
-            # بروزرسانی نمودارها
-            if hasattr(self, 'charts_widget') and 'charts' in dashboard_data:
-                self.charts_widget.update_charts(dashboard_data['charts'])
+            # 🔴 بروزرسانی فقط اگر ویجت‌ها موجود باشند
+            # 🔴 و با بررسی blockSignals برای جلوگیری از خطاهای dataChanged
+            if hasattr(self, 'stats_widget'):
+                try:
+                    # 🔴 بررسی وجود مدل
+                    if hasattr(self.stats_widget, 'model'):
+                        model = self.stats_widget.model()
+                        if model:
+                            model.blockSignals(True)
+                    
+                    self.stats_widget.update_stats(dashboard_data['stats'])
+                    
+                    if hasattr(self.stats_widget, 'model'):
+                        model = self.stats_widget.model()
+                        if model:
+                            model.blockSignals(False)
+                            # 🔴 فقط اگر تغییرات معتبر باشد
+                            if model.rowCount() > 0 and model.columnCount() > 0:
+                                model.layoutChanged.emit()
+                                
+                except Exception as e:
+                    print(f"❌ خطا در بروزرسانی آمار: {e}")
             
-            # بروزرسانی هشدارها
-            if hasattr(self, 'alerts_widget') and 'alerts' in dashboard_data:
-                self.alerts_widget.update_alerts(dashboard_data['alerts'])
+            if hasattr(self, 'charts_widget'):
+                try:
+                    self.charts_widget.update_charts(dashboard_data['charts'])
+                except Exception as e:
+                    print(f"❌ خطا در بروزرسانی نمودارها: {e}")
             
-            # بروزرسانی لیست‌های سریع
-            if hasattr(self, 'quick_lists_widget') and 'quick_lists' in dashboard_data:
-                self.quick_lists_widget.update_lists(dashboard_data['quick_lists'])
+            if hasattr(self, 'alerts_widget'):
+                try:
+                    self.alerts_widget.update_alerts(dashboard_data['alerts'])
+                except Exception as e:
+                    print(f"❌ خطا در بروزرسانی هشدارها: {e}")
+            
+            if hasattr(self, 'quick_lists_widget'):
+                try:
+                    self.quick_lists_widget.update_lists(dashboard_data['quick_lists'])
+                except Exception as e:
+                    print(f"❌ خطا در بروزرسانی لیست‌های سریع: {e}")
             
             print("✅ داشبورد بروزرسانی شد")
             
         except Exception as e:
             print(f"❌ خطا در بروزرسانی داشبورد: {e}")
-    
+            import traceback
+            traceback.print_exc()
+
     def refresh_old_dashboard_data(self):
         """بروزرسانی داده‌های داشبورد قدیمی"""
         try:
+                    
+            if hasattr(self, 'receptions_table'):
+                self.receptions_table.blockSignals(True)
+            
+            if hasattr(self, 'checks_table'):
+                self.checks_table.blockSignals(True)
+
             # 🔴 **آمار پذیرش‌های امروز**
             today = datetime.now().date()
             today_str = today.strftime('%Y-%m-%d')
@@ -600,6 +803,16 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'checks_table'):
                 self.load_due_checks(due_checks)
                 
+            if hasattr(self, 'receptions_table'):
+                self.receptions_table.blockSignals(False)
+                if self.receptions_table.rowCount() > 0:
+                    self.receptions_table.viewport().update()
+            
+            if hasattr(self, 'checks_table'):
+                self.checks_table.blockSignals(False)
+                if self.checks_table.rowCount() > 0:
+                    self.checks_table.viewport().update()
+                    
         except Exception as e:
             print(f"خطا در به‌روزرسانی داشبورد: {e}")
     
@@ -1374,11 +1587,17 @@ class MainWindow(QMainWindow):
         self.timer.start(1000)  # به‌روزرسانی هر ثانیه
     
     def update_datetime(self):
-        """به‌روزرسانی تاریخ و زمان"""
+        """به‌روزرسانی تاریخ و زمان شمسی"""
         now = jdatetime.datetime.now()
-        self.date_label.setText(f"📅 {now.strftime('%Y/%m/%d - %A')}")
-        self.time_label.setText(f"🕒 {now.strftime('%H:%M:%S')}")
-
+        
+        # تاریخ کامل به شمسی
+        jalali_date = now.strftime('%Y/%m/%d')
+        jalali_day_name = now.strftime('%A')
+        self.date_label.setText(f"📅 {jalali_date} - {jalali_day_name}")
+        
+        # زمان
+        time_str = now.strftime('%H:%M:%S')
+        self.time_label.setText(f"🕒 {time_str}")
 
     def create_stats_widget(self):
         """ایجاد ویجت آمارهای مهم"""
@@ -1633,7 +1852,51 @@ class MainWindow(QMainWindow):
     
     def load_initial_data(self):
         """بارگذاری داده‌های اولیه"""
-        self.load_dashboard_data()
+        self.refresh_dashboard_data()
+
+    def on_date_range_changed(self):
+        """وقتی تاریخ تغییر کرد"""
+        pass  # می‌توانید عملیات لازم را اضافه کنید
+
+    def apply_date_filter(self):
+        """اعمال فیلتر تاریخ"""
+        if not JALALI_WIDGET_AVAILABLE:
+            return
+        
+        try:
+            start_date = self.start_date_widget.get_miladi_date()
+            end_date = self.end_date_widget.get_miladi_date()
+            
+            print(f"فیلتر تاریخ اعمال شد: از {start_date} تا {end_date}")
+            
+            # اینجا می‌توانید داده‌ها را بر اساس تاریخ فیلتر کنید
+            # مثلاً:
+            # filtered_receptions = self.filter_receptions_by_date(start_date, end_date)
+            # self.load_recent_receptions(filtered_receptions)
+            
+            QMessageBox.information(self, "فیلتر تاریخ", 
+                f"فیلتر تاریخ اعمال شد.\n"
+                f"از: {self.start_date_widget.get_jalali_date()}\n"
+                f"تا: {self.end_date_widget.get_jalali_date()}")
+            
+        except Exception as e:
+            print(f"خطا در اعمال فیلتر تاریخ: {e}")
+
+    def reset_date_filter(self):
+        """بازنشانی فیلتر تاریخ"""
+        if not JALALI_WIDGET_AVAILABLE:
+            return
+        
+        try:
+            self.start_date_widget.set_to_today()
+            self.end_date_widget.set_to_today()
+            print("فیلتر تاریخ بازنشانی شد")
+            
+            # اینجا می‌توانید همه داده‌ها را دوباره بارگذاری کنید
+            # self.refresh_dashboard_data()
+            
+        except Exception as e:
+            print(f"خطا در بازنشانی فیلتر تاریخ: {e}")
 
 
     def update_stat_box(self, stat_box, value):
@@ -1667,8 +1930,83 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
             print(f"خطا در به‌روزرسانی وضعیت سیستم: {e}")
-    
 
+    def create_date_selector_widget(self):
+        """ایجاد ویجت انتخاب تاریخ برای داشبورد"""
+        if not JALALI_WIDGET_AVAILABLE:
+            return None
+        
+        try:
+            date_widget = QWidget()
+            layout = QHBoxLayout(date_widget)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(10)
+            
+            # برچسب
+            label = QLabel("📅 انتخاب بازه زمانی:")
+            label.setStyleSheet("color: #bbb; font-size: 12px;")
+            layout.addWidget(label)
+            
+            # ویجت تاریخ شروع
+            start_label = QLabel("از:")
+            start_label.setStyleSheet("color: #999;")
+            layout.addWidget(start_label)
+            
+            self.start_date_widget = JalaliDateWidget()
+            self.start_date_widget.set_to_today()  # امروز
+            self.start_date_widget.date_changed.connect(self.on_date_range_changed)
+            layout.addWidget(self.start_date_widget)
+            
+            # ویجت تاریخ پایان
+            end_label = QLabel("تا:")
+            end_label.setStyleSheet("color: #999;")
+            layout.addWidget(end_label)
+            
+            self.end_date_widget = JalaliDateWidget()
+            self.end_date_widget.set_to_today()  # امروز
+            self.end_date_widget.date_changed.connect(self.on_date_range_changed)
+            layout.addWidget(self.end_date_widget)
+            
+            # دکمه اعمال
+            apply_btn = QPushButton("اعمال")
+            apply_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                    padding: 5px 15px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """)
+            apply_btn.clicked.connect(self.apply_date_filter)
+            layout.addWidget(apply_btn)
+            
+            # دکمه بازنشانی
+            reset_btn = QPushButton("بازنشانی")
+            reset_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #95a5a6;
+                    color: white;
+                    padding: 5px 15px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #7f8c8d;
+                }
+            """)
+            reset_btn.clicked.connect(self.reset_date_filter)
+            layout.addWidget(reset_btn)
+            
+            layout.addStretch()
+            return date_widget
+            
+        except Exception as e:
+            print(f"خطا در ایجاد ویجت انتخاب تاریخ: {e}")
+            return None    
 
     def load_recent_receptions(self, receptions):
         """بارگذاری پذیرش‌های اخیر"""
@@ -1682,58 +2020,40 @@ class MainWindow(QMainWindow):
             self.receptions_table.setItem(row, 2, 
                 QTableWidgetItem(f"{reception.get('device_type', '')} {reception.get('brand', '')}"))
             
-            # 🔴 **تبدیل تاریخ میلادی به شمسی - نسخه بهبود یافته**
+            # 🔴 **تبدیل تاریخ میلادی به شمسی - با استفاده از ویجت**
             reception_date = reception.get('reception_date', '')
             if reception_date:
                 try:
-                    # اگر تاریخ در فرمت رشته است، تبدیل کن
-                    date_str = str(reception_date)
-                    
-                    # حذف زمان اگر وجود دارد
-                    if ' ' in date_str:
-                        date_str = date_str.split(' ')[0]
-                    
-                    # جداسازی سال، ماه، روز
-                    parts = date_str.replace('-', '/').split('/')
-                    if len(parts) == 3:
-                        year, month, day = map(int, parts)
-                        
-                        # تبدیل میلادی به شمسی
-                        miladi_date = datetime(year, month, day).date()
-                        jalali_date = jdatetime.date.fromgregorian(date=miladi_date)
-                        jalali_date_str = jalali_date.strftime('%Y/%m/%d')
-                        
-                        self.receptions_table.setItem(row, 3, 
-                            QTableWidgetItem(jalali_date_str))
-                    else:
-                        self.receptions_table.setItem(row, 3, 
-                            QTableWidgetItem(date_str))
-                            
+                    # استفاده از تابع convert_to_jalali_display که قبلاً دارید
+                    jalali_date = convert_to_jalali_display(str(reception_date))
+                    self.receptions_table.setItem(row, 3, QTableWidgetItem(jalali_date))
                 except Exception as e:
                     print(f"⚠️ خطا در تبدیل تاریخ {reception_date}: {e}")
-                    self.receptions_table.setItem(row, 3, 
-                        QTableWidgetItem(str(reception_date)))
+                    self.receptions_table.setItem(row, 3, QTableWidgetItem(str(reception_date)))
             else:
                 self.receptions_table.setItem(row, 3, QTableWidgetItem(''))
-        
             
             self.receptions_table.setItem(row, 4, QTableWidgetItem(str(reception.get('estimated_cost', 0))))
             self.receptions_table.setItem(row, 5, QTableWidgetItem(reception.get('priority', '')))
             
             status_item = QTableWidgetItem(reception.get('status', ''))
-            # رنگ‌بندی وضعیت
             status = reception.get('status', '')
-            if status == 'تعمیر شده':
-                status_item.setForeground(QColor('#27ae60'))
-            elif status == 'در حال تعمیر':
-                status_item.setForeground(QColor('#3498db'))
-            elif status == 'در انتظار':
-                status_item.setForeground(QColor('#f39c12'))
-            elif status == 'تحویل داده شده':
-                status_item.setForeground(QColor('#9b59b6'))
+            
+            # رنگ‌بندی وضعیت
+            color_map = {
+                'تعمیر شده': '#27ae60',
+                'در حال تعمیر': '#3498db',
+                'در انتظار': '#f39c12',
+                'تحویل داده شده': '#9b59b6',
+                'تحویل شده': '#9b59b6',
+                'لغو شده': '#e74c3c'
+            }
+            
+            if status in color_map:
+                status_item.setForeground(QColor(color_map[status]))
             
             self.receptions_table.setItem(row, 6, status_item)
-    
+  
     def load_due_checks(self, checks_list=None):
         """بارگذاری چک‌های در سررسید"""
         # اگر لیست داده نشده، از دیتابیس بخوان
@@ -1771,7 +2091,7 @@ class MainWindow(QMainWindow):
             # تاریخ سررسید (شمسی)
             due_date = check.get('due_date', '')
             if due_date:
-                jalali_date = convert_to_jalali_display(due_date)
+                jalali_date = self.convert_to_jalali_display(due_date)
                 self.checks_table.setItem(row, 3, QTableWidgetItem(jalali_date))
             else:
                 self.checks_table.setItem(row, 3, QTableWidgetItem(''))
@@ -1869,7 +2189,8 @@ class MainWindow(QMainWindow):
     def new_invoice(self):
         """صدور فاکتور"""
         QMessageBox.information(self, "صدور فاکتور", "فرم صدور فاکتور باز خواهد شد.")
-    
+
+
     def open_persons_management(self):
         """مدیریت اشخاص"""
         if not PERSON_FORM_AVAILABLE:
@@ -1947,7 +2268,6 @@ class MainWindow(QMainWindow):
         """هنگام ذخیره دستگاه"""
         print(f"دستگاه ذخیره شد: {device_data.get('brand', '')} {device_data.get('model', '')}")
         QMessageBox.information(self, "ذخیره موفق", "دستگاه با موفقیت ذخیره شد.")
-
 
 
     def open_inventory_management(self):
@@ -2158,6 +2478,428 @@ class MainWindow(QMainWindow):
         self.refresh_dashboard_data()
 
 
+#کلا مربوط به ستینگ و تب ها
+
+    def setup_current_user(self, username):
+        """تنظیم کاربر جاری و دسترسی‌ها"""
+        try:
+            # دریافت اطلاعات کاربر از دیتابیس
+            query = """
+            SELECT u.id, u.username, u.role, p.first_name, p.last_name
+            FROM Users u
+            LEFT JOIN Persons p ON u.person_id = p.id
+            WHERE u.username = ? AND u.is_active = 1
+            """
+            
+            user_data = self.data_manager.db.fetch_one(query, (username,))
+            
+            if user_data:
+                self.current_user = user_data
+                self.current_username = username
+                self.current_user_role = user_data.get('role', 'اپراتور')
+                self.current_user_id = user_data.get('id', 1)
+                
+                # تنظیم PermissionManager
+                self.permission_manager.set_current_user(
+                    self.current_user_id,
+                    username,
+                    self.current_user_role
+                )
+                
+                print(f"👤 کاربر وارد شده: {username}")
+                print(f"   نقش: {self.current_user_role}")
+                print(f"   دسترسی‌ها: {self.permission_manager.get_all_permissions()}")
+                
+            else:
+                # حالت پیش‌فرض برای توسعه
+                self.current_user_role = 'مدیر'
+                self.current_user_id = 1
+                self.permission_manager.set_current_user(1, username, 'مدیر')
+                
+        except Exception as e:
+            print(f"⚠️ خطا در تنظیم کاربر: {e}")
+            self.current_user_role = 'مدیر'
+            self.permission_manager.set_current_user(1, username, 'مدیر')
+
+    def repair_config_manager(self):
+        """ترمیم config_manager در صورت خرابی"""
+        try:
+            from modules.config_manager import ConfigManager
+            
+            print(f"🔍 بررسی config_manager: نوع فعلی = {type(self.config_manager)}")
+            
+            # 🔴 ابتدا import کن تا از circular import جلوگیری شود
+            from ui.main_window import MainWindow
+            
+            # 🔴 بررسی وجود config_manager
+            if not hasattr(self, 'config_manager') or self.config_manager is None:
+                print("🔧 ایجاد config_manager جدید")
+                self.config_manager = ConfigManager(self.data_manager)
+                return True
+            
+            # 🔴 بررسی نوع - با احتیاط
+            current_type = type(self.config_manager).__name__
+            print(f"   نوع فعلی: {current_type}")
+            
+            # اگر config_manager خود MainWindow است
+            if current_type == 'MainWindow' or self.config_manager is self:
+                print("⚠️ config_manager به اشتباه به MainWindow اشاره می‌کند. در حال ترمیم...")
+                self.config_manager = ConfigManager(self.data_manager)
+                print(f"✅ config_manager ترمیم شد. نوع جدید: {type(self.config_manager)}")
+                return True
+            
+            # 🔴 بررسی وجود متدهای ضروری
+            required_methods = ['get', 'set', 'apply_display_settings']
+            for method in required_methods:
+                if not hasattr(self.config_manager, method):
+                    print(f"⚠️ config_manager متد {method} ندارد. در حال ترمیم...")
+                    self.config_manager = ConfigManager(self.data_manager)
+                    return True
+            
+            print(f"✅ config_manager سالم است: {type(self.config_manager)}")
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ خطا در ترمیم config_manager: {e}")
+            # در صورت خطا، ایجاد جدید
+            from modules.config_manager import ConfigManager
+            self.config_manager = ConfigManager(self.data_manager)
+            return True
+
+    def apply_initial_settings(self):
+        """اعمال تنظیمات اولیه روی پنجره اصلی"""
+        try:
+            # 🔴 بررسی مجدد config_manager قبل از استفاده
+            self.repair_config_manager()
+            
+            # 🔴 بررسی وجود متد get
+            if not hasattr(self.config_manager, 'get'):
+                print("❌ config_manager متد get ندارد. در حال ترمیم...")
+                from modules.config_manager import ConfigManager
+                self.config_manager = ConfigManager(self.data_manager)
+            
+            # اعمال تم
+            theme = self.config_manager.get('general', 'theme', 'dark')
+            print(f"🎨 اعمال تم: {theme}")
+            
+            # 🔴 ابتدا استایل تاریک را اعمال کن
+            self.setStyleSheet(self.get_style_sheet())
+            
+            # 🔴 سپس تنظیمات نمایش را اعمال کن (اگر خواستید)
+            # try:
+            #     if hasattr(self.config_manager, 'apply_display_settings'):
+            #         self.config_manager.apply_display_settings(self)
+            # except Exception as e:
+            #     print(f"⚠️ خطا در اعمال تنظیمات نمایش: {e}")
+            
+            # به‌روزرسانی عنوان پنجره
+            app_name = self.config_manager.get('general', 'app_name', 'سیستم مدیریت تعمیرگاه')
+            self.setWindowTitle(f"{app_name} - {self.current_username}")
+            
+            print("✅ تنظیمات اولیه اعمال شد")
+            
+        except Exception as e:
+            print(f"⚠️ خطا در اعمال تنظیمات اولیه: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def setup_config_signals(self):
+        """اتصال سیگنال‌های ConfigManager"""
+        self.config_manager.config_updated.connect(self.on_config_updated)
+    
+    def on_config_updated(self, key_path, changes):
+        """وقتی تنظیمات تغییر کرد"""
+        print(f"⚙️ تنظیمات به‌روزرسانی شد: {key_path}")
+        
+        # اعمال تغییرات بر اساس نوع تنظیمات
+        if key_path.startswith('general.'):
+            self.apply_general_changes(key_path, changes)
+        elif key_path.startswith('display.'):
+            self.apply_display_changes(key_path, changes)
+        elif key_path.startswith('security.'):
+            self.apply_security_changes(key_path, changes)
+    
+    def apply_general_changes(self, key_path, changes):
+        """اعمال تغییرات تنظیمات عمومی"""
+        if 'app_name' in key_path:
+            new_name = changes['new']
+            self.setWindowTitle(f"{new_name} - {self.current_username}")
+        
+        elif 'theme' in key_path:
+            self.apply_theme(changes['new'])
+    
+    def apply_display_changes(self, key_path, changes):
+        """اعمال تغییرات تنظیمات نمایش"""
+        self.config_manager.apply_display_settings(self)
+
+    def apply_security_changes(self, key_path, changes):
+        """اعمال تغییرات تنظیمات امنیتی"""
+        # 🔴 ترمیم قبل از استفاده
+        self.repair_config_manager()
+        
+        if 'role_permissions' in key_path:
+            # 🔴 دریافت ایمن تنظیمات امنیتی
+            try:
+                security_config = self.config_manager.get('security')
+                if security_config is None:
+                    security_config = {}
+                
+                role_permissions = security_config.get('role_permissions', {})
+                print(f"🔒 به‌روزرسانی دسترسی‌های نقش: {list(role_permissions.keys())}")
+                
+                # به‌روزرسانی منوها
+                self.update_menu_permissions()
+                
+            except Exception as e:
+                print(f"⚠️ خطا در اعمال تغییرات امنیتی: {e}")   
+
+    def apply_theme(self, theme_name):
+        """اعمال تم"""
+        # این تابع از قبل وجود دارد، فقط مطمئن شوید کار می‌کند
+        print(f"🎨 اعمال تم: {theme_name}")
+    
+    def update_menu_permissions(self):
+        """به‌روزرسانی منوها بر اساس دسترسی کاربر"""
+        # این تابع منوها را بر اساس نقش کاربر به‌روز می‌کند
+        pass
+
+    def _get_config_manager(self):
+        """دریافت ایمن config_manager"""
+        if not hasattr(self, '_config_manager'):
+            from modules.config_manager import ConfigManager
+            self._config_manager = ConfigManager(self.data_manager)
+        return self._config_manager
+
+    def _set_config_manager(self, value):
+        """تنظیم ایمن config_manager"""
+        self._config_manager = value
+
+    config_manager = property(_get_config_manager, _set_config_manager)
+
+    def test_config_manager(self):
+        """تست سریع config_manager"""
+        try:
+            print("\n🧪 تست ConfigManager:")
+            
+            # تست 1: بررسی وجود
+            if not hasattr(self, 'config_manager'):
+                print("❌ config_manager وجود ندارد")
+                return False
+            
+            # تست 2: بررسی نوع
+            from modules.config_manager import ConfigManager
+            if not isinstance(self.config_manager, ConfigManager):
+                print(f"❌ نوع نادرست: {type(self.config_manager)}")
+                return False
+            
+            # تست 3: تست متد get
+            value = self.config_manager.get('general', 'app_name', 'پیش‌فرض')
+            print(f"✅ تست get: {value}")
+            
+            # تست 4: تست متد set
+            success = self.config_manager.set('test', 'key', 'value', save_to_db=False)
+            print(f"✅ تست set: {'موفق' if success else 'ناموفق'}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ خطا در تست: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def set_current_tab(self, tab_index):
+        """تغییر تب فعلی (برای استفاده از بیرون)"""
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setCurrentIndex(tab_index)
+
+    def check_settings_in_database(self):
+        """بررسی تنظیمات ذخیره شده در دیتابیس"""
+        try:
+            # ۱. بررسی تنظیمات عمومی
+            query = "SELECT * FROM Settings WHERE id = 1"
+            settings = self.data_manager.db.fetch_one(query)
+            print("📊 تنظیمات در جدول Settings:")
+            if settings:
+                for key, value in settings.items():
+                    print(f"   {key}: {value}")
+            else:
+                print("   ⚠️ هیچ تنظیماتی یافت نشد!")
+            
+            # ۲. بررسی تنظیمات امنیتی
+            query = "SELECT * FROM SecuritySettings WHERE id = 1"
+            security_settings = self.data_manager.db.fetch_one(query)
+            print("🔐 تنظیمات امنیتی:")
+            if security_settings:
+                for key, value in security_settings.items():
+                    print(f"   {key}: {value}")
+            
+            # ۳. بررسی cache ConfigManager
+            print("💾 تنظیمات در ConfigManager Cache:")
+            for category, configs in self.config_manager.config_cache.items():
+                print(f"   دسته '{category}':")
+                for key, value in configs.items():
+                    print(f"     {key}: {value}")
+                    
+        except Exception as e:
+            print(f"⚠️ خطا در بررسی تنظیمات: {e}")
+
+    def apply_display_settings(self):
+        """اعمال تنظیمات نمایش به صورت پویا"""
+        try:
+            if not self.config_manager:
+                return
+            
+            # دریافت تنظیمات از config_manager
+            font_family = self.config_manager.get('display', 'font_family', 'B Nazanin')
+            font_size = self.config_manager.get('display', 'font_size', 11)
+            text_color = self.config_manager.get('display', 'text_color', '#FFFFFF')
+            bg_color = self.config_manager.get('display', 'bg_color', '#000000')
+            
+            # تولید استایل پویا
+            style = f"""
+            /* استایل کلی - راست‌چین */
+            QMainWindow {{
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+            
+            QWidget {{
+                font-family: '{font_family}';
+                font-size: {font_size}pt;
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+            
+            /* سایر استایل‌ها ... */
+            QMenuBar {{
+                background-color: #111111;
+                color: {text_color};
+                font-size: 13px;
+                padding: 5px;
+                border-bottom: 1px solid #333;
+            }}
+            
+            QMenu {{
+                background-color: #111111;
+                border: 1px solid #333;
+                border-radius: 5px;
+                color: {text_color};
+            }}
+            
+            QMenu::item {{
+                padding: 8px 25px 8px 20px;
+                color: {text_color};
+                text-align: right;
+            }}
+            
+            QMenu::item:selected {{
+                background-color: #3498db;
+                color: white;
+            }}
+            
+            QPushButton {{
+                padding: 8px 15px;
+                border-radius: 4px;
+                font-weight: bold;
+                border: none;
+                color: {text_color};
+                background-color: #2c3e50;
+            }}
+            
+            QPushButton:hover {{
+                background-color: #34495e;
+            }}
+            
+            QLineEdit, QComboBox, QSpinBox, QTextEdit {{
+                background-color: #222222;
+                color: {text_color};
+                border: 1px solid #444444;
+                border-radius: 4px;
+                padding: 8px;
+            }}
+            
+            QTableWidget {{
+                background-color: #111111;
+                alternate-background-color: #2c2c2c;
+                color: {text_color};
+                gridline-color: #333;
+            }}
+            
+            QHeaderView::section {{
+                background-color: #2c3e50;
+                color: {text_color};
+                padding: 8px;
+                border: none;
+                font-weight: bold;
+            }}
+            
+            QTabBar::tab {{
+                background-color: #2c2c2c;
+                color: #bbb;
+                padding: 8px 15px;
+                margin-left: 2px;
+                margin-right: 0px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }}
+            
+            QTabBar::tab:selected {{
+                background-color: #3498db;
+                color: white;
+                font-weight: bold;
+            }}
+            
+            QStatusBar {{
+                background-color: #1e1e1e;
+                color: {text_color};
+                font-size: 12px;
+                border-top: 1px solid #333;
+            }}
+            
+            QLabel {{
+                color: {text_color};
+            }}
+            
+            QGroupBox {{
+                color: #3498db;
+                border: 2px solid #3498db;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                font-weight: bold;
+                font-size: 12pt;
+            }}
+            
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                padding: 0 10px;
+            }}
+            """
+            
+            # اعمال استایل
+            self.setStyleSheet(style)
+            
+            # اعمال بر روی تمام ویجت‌های فرزند
+            for widget in self.findChildren(QWidget):
+                widget.setStyleSheet("")
+            
+            print(f"✅ تنظیمات نمایش اعمال شد: {font_family} {font_size}pt")
+            
+        except Exception as e:
+            print(f"⚠️ خطا در اعمال تنظیمات نمایش: {e}")
+            # در صورت خطا، استایل تاریک پیش‌فرض را اعمال کن
+            self.setStyleSheet(self.get_style_sheet())
+
+    def on_display_settings_changed(self, display_settings):
+        """وقتی تنظیمات نمایش تغییر کرد"""
+        print("🎨 تنظیمات نمایش تغییر کرد، در حال اعمال...")
+        self.apply_display_settings()
+
+
+
+
+#انتهای توابع تنظیمات
 
     def open_new_parts_inventory(self):
         """انبار قطعات نو"""
@@ -2662,14 +3404,18 @@ class MainWindow(QMainWindow):
         """گزارش مالی"""
         QMessageBox.information(self, "گزارش مالی", "گزارش مالی باز خواهد شد.")
     
-
     def open_settings_window(self, initial_tab="general"):
         """باز کردن پنجره تنظیمات"""
         try:
             from ui.forms.settings.settings_window import SettingsWindow
             
             if not hasattr(self, 'settings_window') or self.settings_window is None:
-                self.settings_window = SettingsWindow(self.data_manager, self)
+                # 🔴 ارسال config_manager به جای self
+                self.settings_window = SettingsWindow(
+                    self.data_manager, 
+                    self.config_manager,  # ✅ این مهم است
+                    self  # parent
+                )
             
             self.settings_window.show()
             self.settings_window.raise_()
@@ -2677,20 +3423,39 @@ class MainWindow(QMainWindow):
             
             # انتخاب تب اولیه
             if initial_tab == "users":
-                self.settings_window.select_tab(1)
+                self.settings_window.main_form.tab_widget.setCurrentIndex(2)  # تب کاربران
             elif initial_tab == "backup":
-                self.settings_window.select_tab(2)
+                self.settings_window.main_form.tab_widget.setCurrentIndex(3)  # تب پشتیبان
             elif initial_tab == "sms":
-                self.settings_window.select_tab(3)
+                self.settings_window.main_form.tab_widget.setCurrentIndex(4)  # تب پیامک
             elif initial_tab == "inventory":
-                self.settings_window.select_tab(4)
+                self.settings_window.main_form.tab_widget.setCurrentIndex(5)  # تب انبار
             elif initial_tab == "security":
-                self.settings_window.select_tab(5)
-            
+                self.settings_window.main_form.tab_widget.setCurrentIndex(6)  # تب امنیت
+            else:
+                self.settings_window.main_form.tab_widget.setCurrentIndex(0)  # تب عمومی
+                
         except ImportError as e:
             QMessageBox.critical(self, "خطا", f"پنجره تنظیمات در دسترس نیست:\n{str(e)}")
         except Exception as e:
             QMessageBox.critical(self, "خطا", f"خطا در باز کردن پنجره تنظیمات:\n{str(e)}")
+
+    def debug_config_manager(self):
+        """دیباگ وضعیت config_manager"""
+        print(f"\n🔍 دیباگ config_manager:")
+        print(f"   موجود است: {hasattr(self, 'config_manager')}")
+        if hasattr(self, 'config_manager'):
+            print(f"   نوع: {type(self.config_manager)}")
+            print(f"   id: {id(self.config_manager)}")
+            
+            # بررسی متدهای اصلی
+            methods = ['get', 'set', 'apply_display_settings']
+            for method in methods:
+                has_method = hasattr(self.config_manager, method)
+                print(f"   متد {method}: {'✅' if has_method else '❌'}")
+        
+        return self.config_manager
+
 
     # در main_window.py
     def setup_sms_module(self):

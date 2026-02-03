@@ -493,39 +493,46 @@ class InventorySettingsForm(BaseInventoryForm):
     def load_settings(self):
         """بارگذاری تنظیمات"""
         try:
-            # بارگذاری تنظیمات عمومی
-            if self.data_manager and hasattr(self.data_manager, 'settings'):
+            # 🔴 بررسی وجود data_manager و settings
+            if not self.data_manager:
+                print("⚠️ DataManager موجود نیست")
+                return
+            
+            # 🔴 روش ۱: اگر config_manager دارد
+            if hasattr(self.data_manager, 'config_manager') and self.data_manager.config_manager:
+                print("✅ از config_manager استفاده می‌کنم")
+                settings = self.data_manager.config_manager.get('inventory', {})
+                
+                # 🔴 تنظیمات عمومی
+                if 'min_stock_default' in settings:
+                    self.default_min_stock.setValue(settings['min_stock_default'])
+                
+                if 'max_stock_default' in settings:
+                    self.default_max_stock.setValue(settings['max_stock_default'])
+            
+            # 🔴 روش ۲: اگر settings قدیمی دارد
+            elif hasattr(self.data_manager, 'settings') and self.data_manager.settings:
+                print("✅ از settings قدیمی استفاده می‌کنم")
                 settings = self.data_manager.settings.get_settings()
                 
-                if settings:
-                    # تنظیمات عمومی
-                    if 'default_min_stock' in settings:
-                        self.default_min_stock.setValue(settings['default_min_stock'])
-                    
-                    if 'default_max_stock' in settings:
-                        self.default_max_stock.setValue(settings['default_max_stock'])
-                    
-                    # واحد پیش‌فرض
-                    if 'default_unit' in settings:
-                        index = self.default_unit.findText(settings['default_unit'])
-                        if index >= 0:
-                            self.default_unit.setCurrentIndex(index)
-                    
-                    # بارگذاری دسته‌بندی‌ها
-                    self.load_categories()
-                    
-                    # بارگذاری برندها
-                    self.load_brands()
-                    
-                    # بارگذاری واحدها
-                    self.load_units()
+                if settings and 'default_min_stock' in settings:
+                    self.default_min_stock.setValue(settings['default_min_stock'])
+                
+                if settings and 'default_max_stock' in settings:
+                    self.default_max_stock.setValue(settings['default_max_stock'])
+            
+            # 🔴 بارگذاری دسته‌بندی‌ها و برندها (اینها مهم‌ترند)
+            self.load_categories()
+            self.load_brands()
+            self.load_units()
             
             print("✅ تنظیمات انبار بارگذاری شد")
             
         except Exception as e:
             print(f"❌ خطا در بارگذاری تنظیمات: {e}")
-            self.show_error(f"خطا در بارگذاری تنظیمات: {str(e)}")
-    
+            # نمایش پیام خطا نه‌چندان مهم
+
+
     def load_categories(self):
         """بارگذاری دسته‌بندی‌ها"""
         try:

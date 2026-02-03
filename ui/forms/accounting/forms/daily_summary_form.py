@@ -16,7 +16,7 @@ from datetime import datetime as dt
 import locale
 
 # وارد کردن ویجت تاریخ شمسی
-from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting
+from utils.jalali_date_widget import JalaliDateInput
 
 
 class DailySummaryForm(QWidget):
@@ -64,7 +64,7 @@ class DailySummaryForm(QWidget):
         date_group = QGroupBox("تاریخ:")
         date_layout = QHBoxLayout()
         
-        self.date_widget = JalaliDateInputAccounting(
+        self.date_widget = JalaliDateInput(
             mode='edit',
             date_format='persian',
             theme='dark',

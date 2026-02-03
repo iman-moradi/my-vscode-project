@@ -13,9 +13,10 @@ from datetime import datetime
 class BackupSettingsForm(QWidget):
     """فرم تنظیمات پشتیبان‌گیری"""
     
-    def __init__(self, data_manager):
+    def __init__(self, data_manager, config_manager=None):
         super().__init__()
         self.data_manager = data_manager
+        self.config_manager = config_manager
         self.init_ui()
         self.apply_styles()
         self.setup_connections()

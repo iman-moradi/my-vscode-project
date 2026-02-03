@@ -38,8 +38,9 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QColor, QIcon
 import jdatetime
 
+from modules.permission_manager import PermissionManager
 # ایمپورت ویجت تاریخ شمسی
-from ui.widgets.jalali_date_input import JalaliDateInput
+from utils.jalali_date_widget import JalaliCalendarDialog, JalaliDateDelegate,JalaliDateEdit,JalaliDateTimeWidget,JalaliDateWidget
 
 class PersonForm(QWidget):
     """
@@ -54,7 +55,7 @@ class PersonForm(QWidget):
     person_deleted = Signal(int)   # سیگنال هنگام حذف شخص
     form_closed = Signal()         # سیگنال هنگام بستن فرم
     
-    def __init__(self, data_manager, person_id=None):
+    def __init__(self, data_manager, person_id=None, config_manager=None, permission_manager=None):
         """
         سازنده فرم
         
@@ -70,6 +71,113 @@ class PersonForm(QWidget):
         self.init_ui()
         self.load_person_data()
         
+        self.config_manager = config_manager
+        self.permission_manager = permission_manager
+        
+        # اعمال تنظیمات روی فرم
+        self.apply_config_to_form()
+        
+        # تنظیم محدودیت‌های دسترسی
+        self.setup_access_controls()
+
+  
+    def apply_config_to_form(self):
+        """اعمال تنظیمات روی فرم"""
+        if self.config_manager:
+            # اعمال استایل
+            self.config_manager.apply_display_settings(self)
+            
+            # اعمال سایر تنظیمات
+            date_format = self.config_manager.get('general', 'date_format', 'شمسی')
+            self.setup_date_inputs(date_format)
+    
+    def setup_access_controls(self):
+        """تنظیم کنترل‌های دسترسی"""
+        if not self.permission_manager:
+            return
+        
+        # غیرفعال کردن دکمه‌ها بر اساس دسترسی
+        if not self.permission_manager.has_permission('edit_persons'):
+            self.btn_save.setEnabled(False)
+            self.btn_delete.setEnabled(False)
+            self.btn_new.setEnabled(False)
+        
+        if not self.permission_manager.has_permission('view_financial_info'):
+            # مخفی کردن تب اطلاعات مالی
+            self.tab_widget.setTabEnabled(2, False)
+    
+    # به جای استفاده از decorator، از روش مستقیم استفاده کنید:
+    def save_person(self):
+        """ذخیره شخص - با بررسی دسترسی"""
+        # بررسی دسترسی
+        if self.permission_manager:
+            if not self.permission_manager.check_and_show('edit_persons', self):
+                return  # اگر دسترسی ندارد، برگرد
+        
+        # ثبت لاگ عملیات
+        try:
+            # کد اصلی ذخیره را اینجا قرار دهید
+            result = self._save_person_impl()
+            
+            # ثبت لاگ
+            if self.permission_manager and self.permission_manager.current_user:
+                self.permission_manager.config_manager.log_security_event(
+                    self.permission_manager.current_user['id'],
+                    'ویرایش شخص',
+                    'ذخیره اطلاعات شخص'
+                )
+            return result
+        except Exception as e:
+            # ثبت لاگ خطا
+            if self.permission_manager and self.permission_manager.current_user:
+                self.permission_manager.config_manager.log_security_event(
+                    self.permission_manager.current_user['id'],
+                    'خطا در ویرایش شخص',
+                    f"خطا: {str(e)}"
+                )
+            raise e
+    
+    def delete_person(self):
+        """حذف شخص - با بررسی دسترسی"""
+        # بررسی دسترسی
+        if self.permission_manager:
+            if not self.permission_manager.check_and_show('delete_persons', self):
+                return  # اگر دسترسی ندارد، برگرد
+        
+        # کد اصلی حذف
+        try:
+            # کد اصلی حذف را اینجا قرار دهید
+            result = self._delete_person_impl()
+            
+            # ثبت لاگ
+            if self.permission_manager and self.permission_manager.current_user:
+                self.permission_manager.config_manager.log_security_event(
+                    self.permission_manager.current_user['id'],
+                    'حذف شخص',
+                    'حذف اطلاعات شخص'
+                )
+            return result
+        except Exception as e:
+            # ثبت لاگ خطا
+            if self.permission_manager and self.permission_manager.current_user:
+                self.permission_manager.config_manager.log_security_event(
+                    self.permission_manager.current_user['id'],
+                    'خطا در حذف شخص',
+                    f"خطا: {str(e)}"
+                )
+            raise e
+    
+    # توابع اصلی را با نام‌های جدید تعریف کنید
+    def _save_person_impl(self):
+        """پیاده‌سازی اصلی ذخیره"""
+        # کد اصلی save_person را اینجا قرار دهید
+        pass
+    
+    def _delete_person_impl(self):
+        """پیاده‌سازی اصلی حذف"""
+        # کد اصلی delete_person را اینجا قرار دهید
+        pass
+
     def setup_colors(self):
         """تنظیم پالت رنگ با تم تاریک"""
         self.colors = {
@@ -564,7 +672,7 @@ class PersonForm(QWidget):
         personal_layout.addRow("کد اقتصادی:", self.economic_code_input)
         
         # تاریخ ثبت
-        self.registration_date_input = JalaliDateInput()
+        self.registration_date_input = JalaliDateWidget()
         personal_layout.addRow("تاریخ ثبت:", self.registration_date_input)
         
         # وضعیت

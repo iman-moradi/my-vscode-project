@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QDate, QTimer
 from PySide6.QtGui import QFont, QColor, QAction, QPainter, QBrush
 from PySide6.QtCharts import QChart, QChartView, QBarSeries, QBarSet, QPieSeries, QPieSlice, QLineSeries, QValueAxis, QBarCategoryAxis
-from utils.date_utils import get_current_jalali, gregorian_to_jalali, jalali_to_gregorian
+from utils.jalali_date_widget import get_current_jalali, gregorian_to_jalali, jalali_to_gregorian
 from ui.forms.reports.utils.sales_calculator import SalesCalculator
 
 

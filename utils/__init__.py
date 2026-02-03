@@ -1,54 +1,39 @@
+try:
+    from helpers import format_currency, to_rial, to_toman
+except ImportError:
+    # توابع جایگزین در صورت عدم وجود فایل helpers
+    def format_currency(amount, currency="تومان"):
+        return f"{amount:,} {currency}" if isinstance(amount, (int, float)) else f"{amount} {currency}"
+    
+    def to_rial(amount_toman):
+        return amount_toman * 10 if isinstance(amount_toman, (int, float)) else 0
+    
+    def to_toman(amount_rial):
+        return amount_rial / 10 if isinstance(amount_rial, (int, float)) else 0
 
-# __init__.py با ماژول‌های بیشتر
-from .date_utils import *
-"""
-ماژول ابزارهای کمکی
-"""
-
-from .date_utils import (
-    get_current_jalali,
-    get_current_jalali_date,
-    get_current_jalali_datetime,
-    gregorian_to_jalali,
-    jalali_to_gregorian,
-    format_jalali_date,
-    get_persian_weekday,
-    get_persian_month_name,
-    get_current_persian_weekday,
-    get_current_persian_month_name,
-    convert_to_jalali_display,
-    get_jalali_today,
-    string_to_jalali,
-    jalali_to_string
-)
+# تغییر این خط: اضافه کردن نقطه قبل از jalali_date_widget برای import نسبی
+try:
+    from .jalali_date_widget import JalaliCalendarDialog, JalaliDateWidget, JalaliDateEdit, JalaliDateTimeWidget, JalaliDateDelegate
+except ImportError:
+    # اگر فایل وجود ندارد، کلاس‌های جایگزین تعریف می‌کنیم
+    class JalaliDateWidget:
+        pass
+    class JalaliDateEdit:
+        pass
+    class JalaliDateTimeWidget:
+        pass
+    class JalaliCalendarDialog:
+        pass
+    class JalaliDateDelegate:
+        pass
 
 __all__ = [
-    'get_current_jalali',
-    'get_current_jalali_date',
-    'get_current_jalali_datetime',
-    'gregorian_to_jalali',
-    'jalali_to_gregorian',
-    'format_jalali_date',
-    'get_persian_weekday',
-    'get_persian_month_name',
-    'get_current_persian_weekday',
-    'get_current_persian_month_name',
-    'convert_to_jalali_display',
-    'get_jalali_today',
-    'string_to_jalali',
-    'jalali_to_string'
-]
-__all__ = [
-    # توابع date_utils
-    'gregorian_to_jalali',
-    'jalali_to_gregorian',
-    # ...
-    
-    # توابع validation_utils
-    'validate_email',
-    'validate_phone',
-    
-    # توابع file_utils
-    'read_config',
-    'save_config'
-]
+    'format_currency', 
+    'to_rial',
+    'to_toman',
+    'JalaliCalendarDialog',
+    'JalaliDateWidget',
+    'JalaliDateEdit',
+    'JalaliDateTimeWidget',
+    'JalaliDateDelegate'
+    ]

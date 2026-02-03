@@ -5,6 +5,7 @@ from .database import DatabaseManager
 import sqlite3
 import json
 import jdatetime
+import hashlib 
 
 try:
     from modules.accounting import AccountManager, TransactionManager
@@ -3469,6 +3470,97 @@ class DeviceWithCategory(BaseModel):
         """
         return self.execute_query(query, (device_type_id, brand_id, model, serial_number, production_year, description))
 
+
+class SecuritySettingsManager(BaseModel):
+    """مدل مدیریت تنظیمات امنیتی"""
+    
+    def __init__(self, db_manager):
+        super().__init__(db_manager)
+        self.table_name = "SecuritySettings"
+    
+    def get_settings(self):
+        """دریافت تنظیمات امنیتی"""
+        query = f"SELECT * FROM {self.table_name} WHERE id = 1"
+        return self.fetch_one(query)
+    
+    def update_settings(self, data):
+        """بروزرسانی تنظیمات امنیتی"""
+        query = f"""
+        UPDATE {self.table_name} SET
+            max_login_attempts = ?,
+            lockout_minutes = ?,
+            session_timeout_minutes = ?,
+            force_logout = ?,
+            remember_me = ?,
+            min_password_length = ?,
+            password_expiry_days = ?,
+            password_history_count = ?,
+            require_uppercase = ?,
+            require_lowercase = ?,
+            require_numbers = ?,
+            require_special = ?,
+            enable_2fa = ?,
+            twofa_method = ?,
+            twofa_force_admin = ?,
+            twofa_force_all = ?,
+            encrypt_passwords = ?,
+            encrypt_financial = ?,
+            encrypt_personal = ?,
+            encrypt_backups = ?,
+            encryption_key_hash = ?,
+            ssl_required = ?,
+            block_external = ?,
+            firewall_level = ?,
+            allowed_ips = ?,
+            audit_log = ?,
+            auto_logout = ?,
+            inactivity_minutes = ?,
+            show_warnings = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+        """
+        
+        # Hash کردن کلید رمزنگاری
+        encryption_key = data.get('encryption_key', '')
+        if encryption_key:
+            encryption_key_hash = hashlib.sha256(encryption_key.encode()).hexdigest()
+        else:
+            encryption_key_hash = ''
+        
+        params = (
+            data.get('max_login_attempts', 3),
+            data.get('lockout_minutes', 15),
+            data.get('session_timeout_minutes', 30),
+            1 if data.get('force_logout') else 0,
+            1 if data.get('remember_me') else 0,
+            data.get('min_password_length', 8),
+            data.get('password_expiry_days', 90),
+            data.get('password_history_count', 5),
+            1 if data.get('require_uppercase') else 0,
+            1 if data.get('require_lowercase') else 0,
+            1 if data.get('require_numbers') else 0,
+            1 if data.get('require_special') else 0,
+            1 if data.get('enable_2fa') else 0,
+            data.get('twofa_method', 'پیامک'),
+            1 if data.get('twofa_force_admin') else 0,
+            1 if data.get('twofa_force_all') else 0,
+            1 if data.get('encrypt_passwords') else 0,
+            1 if data.get('encrypt_financial') else 0,
+            1 if data.get('encrypt_personal') else 0,
+            1 if data.get('encrypt_backups') else 0,
+            encryption_key_hash,
+            1 if data.get('ssl_required') else 0,
+            1 if data.get('block_external') else 0,
+            data.get('firewall_level', 'متوسط'),
+            data.get('allowed_ips', ''),
+            1 if data.get('audit_log') else 0,
+            1 if data.get('auto_logout') else 0,
+            data.get('inactivity_minutes', 10),
+            1 if data.get('show_warnings') else 0
+        )
+        
+        return self.execute_query(query, params)
+
 # کلاس اصلی برای مدیریت تمام مدل‌ها
 # در انتهای فایل models.py، کلاس DataManager را اینگونه اصلاح کنید:
 
@@ -3508,6 +3600,7 @@ class DataManager(QObject):
         self.service_fee = ServiceFee(self.db)
         self.device_category_name = DeviceCategoryName(self.db)  
         self.device_with_category = DeviceWithCategory(self.db)
+        self.security_settings = SecuritySettingsManager(self.db) 
         
         # ایجاد AccountManager
         self.account_manager = AccountManager(self.db)

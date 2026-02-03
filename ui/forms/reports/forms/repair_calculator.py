@@ -6,7 +6,7 @@
 from PySide6.QtCore import QObject
 import jdatetime
 from datetime import datetime, timedelta
-from ..utils.date_utils import jalali_to_gregorian
+from utils.jalali_date_widget import jalali_to_gregorian
 
 class RepairCalculator(QObject):
     """کلاس محاسبات آمار تعمیرات - نسخه نهایی"""

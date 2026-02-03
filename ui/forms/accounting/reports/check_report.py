@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 import json
 import os
 
-from ui.widgets.jalali_date_input import JalaliDateInput
+from utils.jalali_date_widget import JalaliDateInput
 
 
 class CheckReportWorker(QThread):

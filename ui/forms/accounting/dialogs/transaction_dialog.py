@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QFrame
 )
 from PySide6.QtCore import Qt
-from ui.widgets.jalali_date_widget import JalaliDateWidget
+from utils.jalali_date_widget import JalaliDateWidget
 import jdatetime
 from datetime import datetime
 

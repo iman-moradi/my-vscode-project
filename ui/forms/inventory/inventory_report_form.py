@@ -16,7 +16,7 @@ import jdatetime
 from datetime import datetime, timedelta
 import json
 
-from ui.widgets.jalali_date_input import JalaliDateInput
+from utils.jalali_date_widget import JalaliDateInput
 
 from .base_inventory_form import BaseInventoryForm
 

@@ -18,7 +18,7 @@ import json
 
 # ایمپورت ویجت تاریخ شمسی
 try:
-    from ui.widgets.jalali_date_widget import JalaliDateWidget as JalaliDatePicker
+    from utils.jalali_date_widget import JalaliDateWidget as JalaliDatePicker
     JALALI_DATE_AVAILABLE = True
 except ImportError:
     print("⚠️ JalaliDateWidget یافت نشد. از ورودی متنی استفاده می‌شود.")

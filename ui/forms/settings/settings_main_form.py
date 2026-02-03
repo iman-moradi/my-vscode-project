@@ -11,16 +11,21 @@ from .backup_settings_form import BackupSettingsForm
 from .sms_settings_form import SMSSettingsForm
 from .inventory_settings_form import InventorySettingsForm
 from .security_settings_form import SecuritySettingsForm
+from .display_settings_form import DisplaySettingsForm
 
 class SettingsMainForm(QWidget):
     """فرم اصلی تنظیمات با تب‌های مختلف"""
     
-    def __init__(self, data_manager):
+    def __init__(self, data_manager, config_manager=None):  # config_manager اضافه شد
         super().__init__()
         self.data_manager = data_manager
+        self.config_manager = config_manager  # ذخیره config_manager
         self.init_ui()
         self.setup_connections()
         
+        self.load_settings_from_config()
+        
+
         # اعمال استایل
         self.apply_styles()
     
@@ -69,17 +74,20 @@ class SettingsMainForm(QWidget):
             }
         """)
         
+
         # ایجاد فرم‌های مختلف و اضافه کردن به تب‌ها
-        self.general_form = GeneralSettingsForm(self.data_manager)
-        self.financial_form = FinancialSettingsForm(self.data_manager)
-        self.user_form = UserManagementForm(self.data_manager)
-        self.backup_form = BackupSettingsForm(self.data_manager)
-        self.sms_form = SMSSettingsForm(self.data_manager)
-        self.inventory_form = InventorySettingsForm(self.data_manager)
-        self.security_form = SecuritySettingsForm(self.data_manager)
+        self.general_form = GeneralSettingsForm(self.data_manager, self.config_manager)
+        self.display_form = DisplaySettingsForm(self.data_manager, self.config_manager)
+        self.financial_form = FinancialSettingsForm(self.data_manager, self.config_manager)
+        self.user_form = UserManagementForm(self.data_manager, self.config_manager)
+        self.backup_form = BackupSettingsForm(self.data_manager, self.config_manager)
+        self.sms_form = SMSSettingsForm(self.data_manager, self.config_manager)
+        self.inventory_form = InventorySettingsForm(self.data_manager, self.config_manager)
+        self.security_form = SecuritySettingsForm(self.data_manager, self.config_manager)
         
         # اضافه کردن تب‌ها
         self.tab_widget.addTab(self.create_scrollable(self.general_form), "🌐 عمومی")
+        self.tab_widget.addTab(self.create_scrollable(self.display_form), "🎨 نمایش")
         self.tab_widget.addTab(self.create_scrollable(self.financial_form), "💰 مالی")
         self.tab_widget.addTab(self.create_scrollable(self.user_form), "👥 کاربران")
         self.tab_widget.addTab(self.create_scrollable(self.backup_form), "💾 پشتیبان")
@@ -196,18 +204,36 @@ class SettingsMainForm(QWidget):
     def load_settings(self, settings_data):
         """بارگذاری تنظیمات در فرم‌ها"""
         try:
-            # بارگذاری تنظیمات در هر فرم
-            self.general_form.load_settings(settings_data)
-            self.financial_form.load_settings(settings_data)
-            self.user_form.load_settings(settings_data)
-            self.backup_form.load_settings(settings_data)
-            self.sms_form.load_settings(settings_data)
-            self.inventory_form.load_settings(settings_data)
-            self.security_form.load_settings(settings_data)
-            
+            if self.config_manager:
+                # بارگذاری تنظیمات در هر فرم
+                self.general_form.load_settings()
+                self.financial_form.load_settings()
+                self.user_form.load_settings()
+                self.backup_form.load_settings()
+                self.sms_form.load_settings()
+                self.inventory_form.load_settings()
+                self.security_form.load_settings() 
+
+                print("✅ تنظیمات در فرم اصلی بارگذاری شد")
         except Exception as e:
-            print(f"خطا در بارگذاری تنظیمات: {e}")
-    
+            print(f"⚠️ خطا در بارگذاری تنظیمات: {e}")
+
+    def load_settings_from_config(self):
+        """بارگذاری تنظیمات از config_manager"""
+        try:
+            if self.config_manager:
+                # بارگذاری تنظیمات عمومی
+                if hasattr(self.general_form, 'load_settings'):
+                    self.general_form.load_settings()
+                
+                # بارگذاری تنظیمات امنیتی
+                if hasattr(self.security_form, 'load_current_settings'):
+                    self.security_form.load_current_settings()
+                
+                print("✅ تنظیمات از ConfigManager بارگذاری شد")
+        except Exception as e:
+            print(f"⚠️ خطا در بارگذاری تنظیمات: {e}")
+
     def get_all_settings(self):
         """جمع‌آوری تنظیمات از تمام فرم‌ها"""
         settings = {}
@@ -228,13 +254,69 @@ class SettingsMainForm(QWidget):
         return settings
     
     def save_settings(self):
-        """ذخیره تنظیمات (از بیرون فراخوانی می‌شود)"""
+        """ذخیره تنظیمات تمام فرم‌ها"""
         try:
-            settings = self.get_all_settings()
-            return settings
+            if not self.config_manager:
+                QMessageBox.warning(self, "خطا", "ConfigManager موجود نیست!")
+                return False
+            
+            print("💾 شروع ذخیره تنظیمات از تمام فرم‌ها...")
+            
+            # ۱. ذخیره تنظیمات عمومی
+            if hasattr(self.general_form, 'get_settings'):
+                general_settings = self.general_form.get_settings()
+                print(f"📝 تنظیمات عمومی: {len(general_settings)} مورد")
+                for key, value in general_settings.items():
+                    self.config_manager.set('general', key, value, save_to_db=True)
+            
+            # ۲. ذخیره تنظیمات مالی
+            if hasattr(self.financial_form, 'get_settings'):
+                financial_settings = self.financial_form.get_settings()
+                print(f"💰 تنظیمات مالی: {len(financial_settings)} مورد")
+                for key, value in financial_settings.items():
+                    self.config_manager.set('financial', key, value, save_to_db=True)
+            
+            # ۳. ذخیره تنظیمات امنیتی
+            if hasattr(self.security_form, 'save_settings'):
+                success = self.security_form.save_settings()
+                if not success:
+                    QMessageBox.warning(self, "خطا", "ذخیره تنظیمات امنیتی با مشکل مواجه شد")
+            
+            # ۴. ذخیره سایر تنظیمات
+            forms = [
+                (self.inventory_form, 'inventory'),
+                (self.sms_form, 'sms'),
+                (self.backup_form, 'backup')
+            ]
+            
+            for form, category in forms:
+                if hasattr(form, 'get_settings'):
+                    settings = form.get_settings()
+                    if settings:
+                        print(f"📦 تنظیمات {category}: {len(settings)} مورد")
+                        for key, value in settings.items():
+                            self.config_manager.set(category, key, value, save_to_db=True)
+            
+            print("✅ تمام تنظیمات ذخیره شدند")
+            
+            # ذخیره نهایی در دیتابیس
+            self.config_manager.auto_save_configs()
+            
+            QMessageBox.information(
+                self, 
+                "ذخیره موفق", 
+                "✅ تنظیمات با موفقیت در دیتابیس ذخیره شدند.\n\n"
+                "برای اعمال کامل تنظیمات، برنامه را مجدداً راه‌اندازی کنید."
+            )
+            
+            return True
+            
         except Exception as e:
-            QMessageBox.warning(self, "خطا", f"خطا در ذخیره تنظیمات: {str(e)}")
-            return None
+            print(f"❌ خطا در ذخیره تنظیمات: {e}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "خطا", f"خطا در ذخیره تنظیمات:\n{str(e)}")
+            return False
     
     def restore_defaults(self):
         """بازگردانی تنظیمات به پیش‌فرض"""

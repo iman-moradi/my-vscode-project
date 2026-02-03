@@ -28,7 +28,7 @@ except ImportError as e:
 
 
 try:
-    from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting
+    from utils.jalali_date_widget import JalaliDateInput
     JALALI_DATE_INPUT_AVAILABLE = True
 except ImportError:
     print("⚠️ ویجت تاریخ شمسی در دسترس نیست")
@@ -321,8 +321,8 @@ class FinancialReportsForm(QWidget):
         
         # ویجت‌های تاریخ شمسی
         if JALALI_DATE_INPUT_AVAILABLE:
-            self.start_date_input = JalaliDateInputAccounting(mode='edit', theme='dark')
-            self.end_date_input = JalaliDateInputAccounting(mode='edit', theme='dark')
+            self.start_date_input = JalaliDateInput(mode='edit', theme='dark')
+            self.end_date_input = JalaliDateInput(mode='edit', theme='dark')
         else:
             # جایگزین ساده
             self.start_date_input = QDateEdit()

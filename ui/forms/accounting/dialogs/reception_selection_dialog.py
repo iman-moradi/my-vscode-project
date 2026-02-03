@@ -15,7 +15,7 @@ import jdatetime
 
 # ایمپورت ویجت تاریخ شمسی جدید (کلیک روی فیلد)
 try:
-    from ui.widgets.jalali_date_widget import JalaliDateWidget as JalaliDatePicker
+    from utils.jalali_date_widget import JalaliDateWidget as JalaliDatePicker
     JALALI_DATE_AVAILABLE = True
     print("✅ ویجت تاریخ شمسی (کلیک روی فیلد) در دیالوگ بارگذاری شد")
 except ImportError as e:

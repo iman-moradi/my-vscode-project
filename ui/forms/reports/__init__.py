@@ -47,27 +47,6 @@ except ImportError:
     ReportHelpSystem = None
     print("⚠️ ReportHelpSystem در دسترس نیست")
 
-# توابع تاریخ
-try:
-    from .utils.date_utils import get_current_jalali, gregorian_to_jalali, jalali_to_gregorian
-except ImportError:
-    print("⚠️ توابع تاریخ در دسترس نیستند")
-    
-    # تعریف توابع جایگزین
-    import jdatetime
-    from datetime import datetime
-    
-    def get_current_jalali():
-        now = jdatetime.datetime.now()
-        return now.strftime('%Y/%m/%d %H:%M:%S')
-    
-    def gregorian_to_jalali(gregorian_date):
-        if not gregorian_date:
-            return ""
-        return str(gregorian_date)
-    
-    def jalali_to_gregorian(jalali_date_str, format_str='%Y-%m-%d'):
-        return jalali_date_str
 
 __all__ = [
     # کلاس‌های اصلی
@@ -92,8 +71,5 @@ __all__ = [
     'PerformanceMonitor',
     'ReportHelpSystem',
     
-    # توابع تاریخ
-    'get_current_jalali',
-    'gregorian_to_jalali',
-    'jalali_to_gregorian'
+
 ]

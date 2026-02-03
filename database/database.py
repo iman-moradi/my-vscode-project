@@ -390,17 +390,22 @@ class DatabaseManager(QObject):
             CREATE TABLE IF NOT EXISTS Settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 app_name TEXT DEFAULT 'سیستم مدیریت تعمیرگاه لوازم خانگی',
-                date_format TEXT DEFAULT 'شمسی',
-                font_name TEXT DEFAULT 'B Nazanin',
-                font_size INTEGER DEFAULT 10,
-                bg_color TEXT DEFAULT '#FFFFFF',
-                text_color TEXT DEFAULT '#000000',
-                logo_path TEXT,
                 company_name TEXT,
                 company_address TEXT,
                 company_phone TEXT,
                 company_email TEXT,
-                tax_percentage REAL DEFAULT 9,
+                logo_path TEXT,
+                date_format TEXT DEFAULT 'شمسی',
+                language TEXT DEFAULT 'فارسی',
+                theme TEXT DEFAULT 'dark',
+                font_name TEXT DEFAULT 'B Nazanin',
+                font_size INTEGER DEFAULT 11,
+                bg_color TEXT DEFAULT '#000000',      # 🔴 سیاه
+                text_color TEXT DEFAULT '#FFFFFF',    # 🔴 سفید
+                default_currency TEXT DEFAULT 'تومان',
+                tax_percentage REAL DEFAULT 9.0,
+                auto_backup INTEGER DEFAULT 1,
+                backup_path TEXT DEFAULT 'data/backup/',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             ''')
@@ -965,6 +970,49 @@ class DatabaseManager(QObject):
             )
             ''')
             
+            # ایجاد جدول تنظیمات امنیتی
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS SecuritySettings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                max_login_attempts INTEGER DEFAULT 3,
+                lockout_minutes INTEGER DEFAULT 15,
+                session_timeout_minutes INTEGER DEFAULT 30,
+                force_logout BOOLEAN DEFAULT 1,
+                remember_me BOOLEAN DEFAULT 1,
+                min_password_length INTEGER DEFAULT 8,
+                password_expiry_days INTEGER DEFAULT 90,
+                password_history_count INTEGER DEFAULT 5,
+                require_uppercase BOOLEAN DEFAULT 1,
+                require_lowercase BOOLEAN DEFAULT 1,
+                require_numbers BOOLEAN DEFAULT 1,
+                require_special BOOLEAN DEFAULT 0,
+                enable_2fa BOOLEAN DEFAULT 0,
+                twofa_method TEXT DEFAULT 'پیامک',
+                twofa_force_admin BOOLEAN DEFAULT 1,
+                twofa_force_all BOOLEAN DEFAULT 0,
+                encrypt_passwords BOOLEAN DEFAULT 1,
+                encrypt_financial BOOLEAN DEFAULT 1,
+                encrypt_personal BOOLEAN DEFAULT 0,
+                encrypt_backups BOOLEAN DEFAULT 1,
+                encryption_key_hash TEXT,
+                ssl_required BOOLEAN DEFAULT 0,
+                block_external BOOLEAN DEFAULT 1,
+                firewall_level TEXT DEFAULT 'متوسط',
+                allowed_ips TEXT,
+                audit_log BOOLEAN DEFAULT 1,
+                auto_logout BOOLEAN DEFAULT 1,
+                inactivity_minutes INTEGER DEFAULT 10,
+                show_warnings BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+
+            # درج تنظیمات پیش‌فرض
+            self.cursor.execute('''
+            INSERT OR IGNORE INTO SecuritySettings (id) VALUES (1)
+            ''')
+
             # ایجاد جدول لاگ‌ها
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS Logs (

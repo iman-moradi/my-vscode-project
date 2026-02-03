@@ -175,13 +175,13 @@ class ProfitCalculationForm(QWidget):
         # تاریخ شروع
         period_layout.addWidget(QLabel("تاریخ شروع:"), 0, 0)
         
-        from ui.forms.accounting.widgets.jalali_date_input import JalaliDateInputAccounting
-        self.start_date_input = JalaliDateInputAccounting(mode='edit', theme='dark')
+        from utils.jalali_date_widget import JalaliDateInput
+        self.start_date_input = JalaliDateInput(mode='edit', theme='dark')
         period_layout.addWidget(self.start_date_input, 0, 1)
         
         # تاریخ پایان
         period_layout.addWidget(QLabel("تاریخ پایان:"), 1, 0)
-        self.end_date_input = JalaliDateInputAccounting(mode='edit', theme='dark')
+        self.end_date_input = JalaliDateInput(mode='edit', theme='dark')
         period_layout.addWidget(self.end_date_input, 1, 1)
         
         # تنظیم تاریخ‌های پیش‌فرض (ماه گذشته)

@@ -30,11 +30,11 @@ try:
     # سعی می‌کنیم از چندین مسیر مختلف import کنیم
     try:
         # مسیر مستقیم
-        from widgets.jalali_date_widget import JalaliDateWidget
+        from utils.jalali_date_widget import JalaliDateWidget
         print("✅ ویجت تاریخ شمسی از jalali_date_widget بارگذاری شد")
     except ImportError:
         # مسیر دیگر
-        from widgets.jalali_date_widget import JalaliDateWidget
+        from utils.jalali_date_widget import JalaliDateWidget
         print("✅ ویجت تاریخ شمسی از widgets.jalali_date_widget بارگذاری شد")
     
     JALALI_WIDGET_AVAILABLE = True

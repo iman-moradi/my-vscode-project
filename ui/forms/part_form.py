@@ -16,7 +16,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 try:
-    from ui.widgets.jalali_date_input import JalaliDateInput
+    from utils.jalali_date_widget import JalaliDateInput
     from ui.widgets.searchable_combo import SearchableCombo
     print("✅ ویجت‌های سفارشی import شدند")
 except ImportError as e:

@@ -26,7 +26,7 @@ if parent_dir not in sys.path:
 
 # import ویجت تاریخ شمسی
 try:
-    from ui.forms.reports.widgets.jalali_date_input import JalaliDateInput
+    from utils.jalali_date_widget import JalaliDateInput
     JALALI_DATE_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️ خطا در بارگذاری ویجت تاریخ شمسی: {e}")
@@ -35,7 +35,7 @@ except ImportError as e:
 
 # import توابع تاریخ شمسی
 try:
-    from ui.forms.reports.utils.date_utils import (
+    from utils.jalali_date_widget import (
         get_current_jalali, gregorian_to_jalali, jalali_to_gregorian
     )
     DATE_UTILS_AVAILABLE = True

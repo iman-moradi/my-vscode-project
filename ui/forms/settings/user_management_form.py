@@ -13,9 +13,10 @@ from PySide6.QtGui import QFont
 class UserManagementForm(QWidget):
     """فرم مدیریت کاربران و سطوح دسترسی"""
     
-    def __init__(self, data_manager):
+    def __init__(self, data_manager, config_manager=None):
         super().__init__()
         self.data_manager = data_manager
+        self.config_manager = config_manager
         self.current_user_id = None
         self.init_ui()
         self.apply_styles()
